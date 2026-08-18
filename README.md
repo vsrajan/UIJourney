@@ -130,6 +130,9 @@ the GitLab UI.
 1. Copy from this template into the firm's kit repo, keeping paths exactly:
    - `.github/copilot-instructions.md`
    - `.github/agents/` (all six files)
+   - `scripts/validate-lib.mjs` and `scripts/validate-scene.mjs` (the
+     mechanical quality gates the library and every mockup must pass —
+     plain Node, no dependencies)
    - `WORKFLOW.md` and this `README.md`
 
    Yes, the directory is named `.github/` even though the repo lives on

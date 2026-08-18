@@ -89,6 +89,15 @@ in a web UI. Consequences that apply to every agent and every task:
   classes.
 - Generated `.tsx` must pass the repo's lint and type-check before a task is
   reported complete. Fix failures; never disable or bypass a rule.
+- **Validators are part of delivery**: the library must pass
+  `node scripts/validate-lib.mjs lib/uds.excalidrawlib` and every journey
+  scene must pass `node scripts/validate-scene.mjs <scene> <lib>` with zero
+  errors before the MR is raised. Fix errors — never edit the validators to
+  make them pass.
+- Every text element in libraries and scenes uses `fontFamily: 2`
+  (Helvetica). `customData` component metadata lives on container elements
+  only. `annotation: true` marks reviewer notes exclusively — never screen
+  content.
 
 ## The agent pipeline
 

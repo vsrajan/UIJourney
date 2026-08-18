@@ -26,30 +26,55 @@ A merge request containing
    `customData: { journeyStep: <n>, screenName: "<Name>" }`. Steps are
    numbered in journey order.
 2. Screens laid out left-to-right in journey order, consistent frame sizes,
-   generous gutters between frames.
+   generous gutters between frames. Give each screen the standard's ground:
+   a page-background rect (`--background` / neutral20) and content on a
+   `Card` where the pattern calls for one — screens must not float on bare
+   white.
 3. Every UI element inside a frame is an instance of a library entry:
-   copy its elements from `lib/uds.excalidrawlib`, repositioned, with text
-   labels updated to the journey's real content (never lorem), and its
-   `customData` updated to the concrete props
-   (`{ component, variant, props: { label: "Submit claim", ... } }`).
-   Variants and props must exist in `data/component-manifest.json`.
-4. Transitions are **arrows between frames** with
+   copy its elements from `lib/uds.excalidrawlib` VERBATIM — geometry,
+   colors, fonts — then reposition, update text to the journey's real
+   content (never lorem), and update the container's `customData` to the
+   concrete props (`{ component, variant, props: { label: "Submit claim",
+   ... } }`). Variants and props must exist in
+   `data/component-manifest.json`. Headings, body copy, links, labels,
+   tables, cards, and app headers are library entries too (`Heading`,
+   `Text`, `Link`, `Label`, `Table`, `Card`, `AppHeader`) — if a needed
+   entry is missing from the library, STOP and report the coverage gap;
+   never substitute a freehand shape.
+4. **Resize only what the entry permits.** Each library container carries
+   `customData.resize`: `"horizontal"` may stretch in width (heights are
+   fixed by the standard — never change them), `"none"` may not be resized
+   at all, `"both"` is free. After editing a bound label, keep the text's
+   width/height within its container.
+5. **Metadata lives on the container element only.** Never copy
+   `customData.component` onto a bound text (the library is built this
+   way — keep it so). Every text element uses `fontFamily: 2`.
+6. Transitions are **arrows between frames** with
    `customData: { transition: { from: <step>, to: <step>, trigger:
    "<component ref or event>", condition: "<optional>" } }` and a text
    label naming the trigger (e.g. "on Submit").
-5. Freehand shapes (notes, annotations, question marks) are allowed but must
-   carry `customData: { annotation: true }` so codegen ignores them.
-6. Layout discipline: 8px positional grid; respect each library shape's
-   measured size — never stretch a control taller than its kit height.
+7. `customData: { annotation: true }` means "reviewer note — codegen must
+   ignore this" and is legal ONLY for margin notes, callouts, and question
+   marks OUTSIDE the screen's UI. It is never a fallback for "not sure
+   which component": screen copy, titles, table content, headers, logos,
+   and layout regions are all components, and an annotation-tagged element
+   inside a frame is a contract violation (codegen would silently drop it).
+8. Layout discipline: 8px positional grid; align control edges within a
+   form; the logo appears only via the library's `AppHeader`/`Logo` entry,
+   on the left, on a light background.
 
 ## Steps
 1. Parse the journey into screens, per-screen components, and transitions.
    The developer is present in chat: if the description is ambiguous about
    a screen's purpose or a decision branch, ask your clarifying questions
    in chat now, before building — consolidated, not a drip-feed.
-2. Build the scene per the contract. Validate your own JSON: parses, every
-   non-annotation element has manifest-valid `customData`, every frame has a
-   `journeyStep`, arrows reference existing steps.
+2. Build the scene per the contract, then **run
+   `node scripts/validate-scene.mjs journeys/<name>/journey.excalidraw
+   lib/uds.excalidrawlib` and fix every ERROR before delivering** — it
+   mechanically enforces the contract above (valid JSON, fontFamily,
+   annotation misuse, metadata placement, text-fits-container, library
+   conformance, transition integrity). Explain any WARNs in the MR
+   description.
 3. Deliver per the standard procedure in `.github/copilot-instructions.md` —
    branch `uijourney/journey-<name>`, MR title
    `[uijourney] Mockup: <journey name>`. The MR description must include:

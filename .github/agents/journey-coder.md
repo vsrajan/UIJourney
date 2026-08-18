@@ -43,7 +43,10 @@ do not reinterpret a picture.
    and flag it in chat — never invent an API.
 3. Elements with `customData.annotation: true` are skipped. Elements with no
    `customData` at all: attempt no guess; list them in the report as
-   unmapped.
+   unmapped. A bound text whose container already declares a component is
+   the SAME component instance — its text is the label/content prop, never
+   a second component (dedupe by `containerId`, even if a legacy scene
+   wrongly stamped `customData` on the text too).
 4. Layout comes from the kit's spacing utilities (compact rhythm), inferred
    from the scene's relative positions — never absolute pixel positioning,
    never inline styles, never raw hex (the compliance lint enforces this;
