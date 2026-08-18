@@ -1,8 +1,57 @@
 # UIJourney — repository instructions for GitHub Copilot
 
 This repository implements the UIJourney pipeline: plain-text user-journey
-prompts become UDS-compliant Excalidraw mockups, and approved mockups become
+stories become UDS-compliant Excalidraw mockups, and approved mockups become
 UDS-compliant React code built from the firm's shadcn-based component kit.
+
+## Execution environment — read this first
+
+The repository is hosted on the firm's **GitLab**. Agents run in **VS Code
+agent mode on the developer's machine**, against their local clone. There is
+no cloud agent, no GitHub issue assignment, and no ability to open anything
+in a web UI. Consequences that apply to every agent and every task:
+
+- Your task input is the text the developer pastes into chat (usually a
+  GitLab story) plus the files in the clone. If you need something that is
+  in neither, ask the developer in chat — they are present.
+- Your deliverable is committed work on a branch plus a merge request,
+  raised via git push options (see Delivery below). Never claim you
+  "opened a PR"; there are no PRs here, only GitLab MRs.
+- Continuous integration is **GitLab CI** (`.gitlab-ci.yml`), not GitHub
+  Actions. Any CI job you create or extend goes there.
+
+## Delivery procedure — every agent follows this
+
+1. **Preflight, before changing anything:** run `git status`. If the
+   working tree is not clean, stop and ask the developer to commit or
+   stash first — never mix agent output with unrelated local edits. Then
+   branch off the up-to-date default branch:
+   `git fetch origin` and `git checkout -b uijourney/<task-slug>
+   origin/<default-branch>` (ask the developer for the default branch name
+   if it is not obvious from `git remote show origin`).
+   Exception: `journey-coder` continues on the existing mockup MR branch
+   instead of creating a new one.
+2. Do the work. Commit with clear, descriptive messages.
+3. Prepare the full MR description (each agent's file says what it must
+   contain) and print it in chat for the developer.
+4. Raise the MR directly from git using GitLab push options:
+
+   ```
+   git push -u origin uijourney/<task-slug> \
+     -o merge_request.create \
+     -o merge_request.target=<default-branch> \
+     -o merge_request.title="[uijourney] <title>" \
+     -o merge_request.draft
+   ```
+
+   The GitLab server creates the draft MR as a side effect of the push —
+   no extra CLI tool is needed. Push options set the title reliably;
+   long markdown descriptions do not survive shell quoting well, so ask
+   the developer to paste the description you printed in step 3 into the
+   MR, and to mark it ready when they have reviewed the diff.
+5. If the push is rejected (auth, protected branch, proxy), show the exact
+   error and let the developer resolve it — do not retry with force or
+   alternative remotes.
 
 ## Authoritative sources, in order of precedence
 
@@ -48,8 +97,11 @@ Setup (run once, re-run when the kit or standards change):
 `guardrails-engineer`.
 
 Recurring, per user journey:
-`journey-designer` (prompt → mockup PR) → human approval on the PR →
-`journey-coder` (approved mockup → code on the same PR).
+`journey-designer` (story → mockup MR) → developer reviews the mockup and,
+when satisfied, launches `journey-coder` on the same branch (launching the
+coder IS the approval — the developer is trusted; the `journey-approved`
+GitLab label on the MR is a process convention for humans, not a gate the
+agent can verify).
 
 Each agent's outputs are committed files; the next agent must verify its
 declared inputs exist and are current before doing anything else. See

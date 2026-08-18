@@ -10,114 +10,165 @@ UIJourney is a set of GitHub Copilot custom agents that let UI developers:
 4. and get back **working React code** for those screens, built only from the
    firm's shadcn-based component kit, that passes the compliance checks.
 
-This repository is the **template**. The agents themselves must run inside
-the firm repo that contains the component kit (the repo with
+**Our environment:** the firm's code is hosted on **GitLab**, so the agents
+run in **VS Code Copilot agent mode on your own machine**, against your
+local clone. (GitHub's cloud flow of "assign an issue to Copilot on
+github.com" does not exist for GitLab-hosted repos — everything here is
+launched by you, from VS Code.)
+
+This repository is the **template**. The agents must be installed into the
+firm's GitLab repo that contains the component kit (the repo with
 `src/components/ui/*.tsx`), because everything they produce is extracted
-from that source code. Installation is covered below.
+from that source code.
 
 ---
 
-## Before anything else: how you actually "give input" to a Copilot agent
+## Before anything else: how you actually "give input" to an agent
 
-This is the part that confuses everyone the first time, so read it once and
-the rest of this document will make sense.
+Read this once and the rest of the document will make sense.
 
 A Copilot custom agent is just a markdown instruction file in
-`.github/agents/`. You do not run it from a command line and it has no
-input form to fill in. There are exactly **three ways** an agent receives
-input, and every input listed in this README is one of these three kinds:
+`.github/agents/`. It has no input form. There are exactly **three ways**
+an agent receives input, and every input listed in this README is one of
+these kinds:
 
 **Kind A — Files already in the repo at a known path.**
-The agent instructions tell it to read, for example,
-`data/tokens.json`. You "provide" this input simply by making sure that
-file exists at that path on the default branch *before* you start the
-agent. If a Kind A input is missing, our agents are written to stop and
-tell you which earlier agent should have produced it — that is how the
-chain enforces its own ordering. You never paste file contents anywhere for
-a Kind A input.
+The agent instructions tell it to read, for example, `data/tokens.json`.
+You "provide" this input simply by making sure that file exists at that
+path — in this workflow, that means the earlier agent's merge request was
+**merged** and you have **pulled** the latest default branch. The agent
+reads it straight from your clone; you never paste file contents anywhere.
+If a Kind A input is missing, our agents are written to stop and tell you
+which earlier agent should have produced it — that is how the chain
+enforces its own ordering.
 
-**Kind B — Text you type into the GitHub issue that you assign to Copilot.**
-To start any agent, you create a GitHub issue, write the input into the
-issue body, and assign the issue to Copilot, choosing the agent by name.
-Everything in the issue title and body becomes the agent's task input.
-This is how you pass one-off content: the raw standards document, a journey
-description, a special instruction.
+This also answers "how do I give the agent our component source code?" —
+you don't. `src/components/ui/*.tsx` and the CSS are files in the very repo
+the agent is running in; it can already read every one of them. That is
+exactly why the agent files must be installed in the kit repo and not in a
+separate repo.
 
-Step-by-step (identical for every agent in this document):
+**Kind B — Text you type (or paste) into the Copilot chat when you launch
+the agent.**
+This is how every run starts, and how you pass one-off content: a GitLab
+story, the raw standards document, a special instruction. Step by step —
+identical for every agent in this document:
 
-1. In the firm repo on github.com, go to **Issues → New issue**.
-2. Set the **title** and **body** as shown in that agent's "Example issue"
-   section below.
-3. In the right-hand sidebar, under **Assignees**, assign the issue to
-   **Copilot**.
-4. When prompted for which agent to use, pick the agent name (for example
-   `standards-curator`). If your Copilot setup does not show an agent
-   picker, add a first line to the issue body instead:
-   `Use the agent defined in .github/agents/standards-curator.md and follow it exactly.`
-5. Copilot starts working and will open a **pull request** when done. All
-   agent output arrives as a PR — nothing is ever pushed straight to main.
+1. Open the firm repo in VS Code. Make sure you're on the latest default
+   branch with no uncommitted changes (`git status` shows clean) — the
+   agent will check and refuse otherwise.
+2. Open the Copilot Chat panel and switch it to **Agent** mode.
+3. In the agent picker, choose the UIJourney agent by name (for example
+   `standards-curator`) — they load automatically from `.github/agents/`.
+   *If the picker doesn't show them* (extension version differences), use
+   the fallback: attach the file `.github/agents/standards-curator.md` to
+   the chat and begin your message with "Follow the attached agent
+   instructions exactly."
+4. Paste the input shown in that agent's "Example chat prompt" section
+   below — for journey work this is simply the GitLab story text, copied
+   from the story's description field — and send.
+5. The agent works in your local clone: it creates a branch, edits files,
+   commits, and **raises a draft merge request itself** when it pushes
+   (see "How the MR appears" below). You review the diff, paste the MR
+   description the agent prepared into GitLab, and mark the MR ready.
 
-**Kind C — A label on a pull request.**
-Used once in this workflow: applying the label `journey-approved` to a
-mockup PR is the signal that unlocks the code-generation agent. You add a
-label from the **Labels** section of the PR's right-hand sidebar. (Create
-the label once under **Issues → Labels → New label** if it doesn't exist.)
+Important limitation to internalize: **the agent cannot see GitLab.** It
+cannot read a story by its number, cannot read MR comments, cannot see
+labels. Anything living in GitLab that the agent needs must be pasted into
+chat by you. You are the bridge in both directions.
 
-That's the whole input model: **files at paths, issue text, one label.**
-Each agent section below lists its inputs tagged `[A]`, `[B]`, or `[C]` so
-you always know the mechanism.
+**Kind C — The `journey-approved` label on a merge request.**
+On GitLab this label is a **team convention for humans, not a machine
+gate**: agents can't check it. It records, for teammates and auditors, that
+the mockup was reviewed. The actual approval mechanism is simpler — *you
+launching the `journey-coder` agent is the approval.* Apply the label when
+you approve (create it once under the GitLab project's **Manage → Labels**
+if it doesn't exist), then launch the coder.
+
+That's the whole input model: **files at paths, chat text, one
+human-convention label.** Each agent section below tags its inputs `[A]`,
+`[B]`, or `[C]`.
+
+### How the MR appears (git push options — no extra tools)
+
+Plain `git` can't normally create a merge request — that's a GitLab
+feature, not a git feature. But GitLab supports **push options**: extra
+flags on an ordinary `git push` that the GitLab *server* acts on. The
+agents raise MRs with:
+
+```
+git push -u origin <branch> \
+  -o merge_request.create \
+  -o merge_request.target=<default-branch> \
+  -o merge_request.title="[uijourney] ..." \
+  -o merge_request.draft
+```
+
+The push itself creates the draft MR. Nothing to install, no API tokens —
+it works with the same git authentication you already push with. The one
+thing push options don't handle well is a long markdown description, so
+the agent prints the description in chat and you paste it into the MR in
+the GitLab UI.
 
 ---
 
-## One-time installation (before running any agent)
+## One-time setup on each developer's machine
 
-Do this once, in the firm repo that contains `src/components/ui/*.tsx`:
+- VS Code with the GitHub Copilot extension, signed in with a Copilot
+  license, and agent mode available in chat.
+- A clone of the firm repo with working `git push` to GitLab (your normal
+  SSH key or token — whatever you already use).
+- Node (the version the repo's `.nvmrc`/docs specify) and the firm's npm
+  registry/proxy configured — the setup agents run extraction scripts and
+  Playwright locally on your machine.
+- For whoever runs setup agent 3: Playwright needs a local Chromium
+  (`npx playwright install chromium`); if the download is blocked by the
+  firm proxy, ask your platform team how browser binaries are provisioned.
 
-1. Copy these from this template repo into the firm repo, keeping paths:
+## One-time installation in the firm repo
+
+1. Copy from this template into the firm's kit repo, keeping paths exactly:
    - `.github/copilot-instructions.md`
    - `.github/agents/` (all six files)
    - `WORKFLOW.md` and this `README.md`
-   Commit them to the default branch (via a normal PR if the repo requires
-   one).
-2. Confirm **Copilot coding agent** is enabled for the repo (repo
-   **Settings → Copilot**, or ask whoever administers Copilot at the firm).
-   You need to be able to assign an issue to Copilot.
-3. Create the label `journey-approved` (**Issues → Labels → New label**,
-   any color).
-4. Have the raw UDS standards markdown file at hand — you will paste or
-   attach it in the very first issue.
+
+   Yes, the directory is named `.github/` even though the repo lives on
+   GitLab — that's where the VS Code Copilot extension looks for its
+   instruction files; it's unrelated to hosting.
+2. Merge that via a normal MR to the default branch.
+3. Create the `journey-approved` label (**Manage → Labels → New label**).
+4. Have the raw UDS standards markdown at hand for the first agent —
+   preferably commit it as `docs/raw/uds-standards-raw.md` first (large
+   documents survive better as committed files than as pasted chat text).
 
 ---
 
 ## The workflow at a glance
 
-Two chains. Setup runs once; the journey loop runs for every journey.
-
 ```
-SETUP (once, strictly in this order, merge each PR before the next):
+SETUP (once, strictly in this order, merge each MR before the next):
 
   standards-curator  →  design-data-extractor  →  excalidraw-librarian  →  guardrails-engineer
   (clean the docs)      (extract tokens +          (build the approved      (build the lint +
-                         component manifest)        Excalidraw shapes)       CI compliance gate)
+                         component manifest)        Excalidraw shapes)       GitLab CI gate)
 
 JOURNEY LOOP (repeat per user journey):
 
-  issue with journey text ──▶ journey-designer ──▶ mockup PR
+  copy GitLab story text ──▶ journey-designer ──▶ draft MR with the mockup
        ▲                                              │
-       │            developer opens the .excalidraw   │
-       └── revision comments ◀── file, reviews it ◀───┘
+       │        you open the .excalidraw file,        │
+       └── revisions via chat ◀── review, nudge  ◀────┘
                                       │
-                          adds label `journey-approved`
+              you add `journey-approved` label, and launch:
                                       │
-                          new issue ──▶ journey-coder ──▶ code on the same PR
+                    journey-coder ──▶ code on the same MR branch
                                       │
-                          CI compliance check passes → normal review → merge
+                    `uijourney-compliance` CI job passes → review → merge
 ```
 
-Agents cannot call each other. The chain works because each agent's
-**outputs are committed files**, and the next agent **checks those files
-exist before doing anything**. If you run them out of order, the agent
-tells you what's missing and which agent produces it.
+Agents can't call each other; each one's committed outputs are the next
+one's inputs, and each one checks its inputs exist before starting. Run
+them out of order and they tell you what's missing and who produces it.
 
 ---
 
@@ -132,93 +183,77 @@ defined, recording that in `docs/token-source.md`.
 
 | Input | Kind | How to provide it — exactly |
 |---|---|---|
-| The raw UDS standards markdown | **[B]** | Paste the full markdown text into the issue body, underneath the request line. If it is too long to paste comfortably, commit it to the repo first as `docs/raw/uds-standards-raw.md` (any path works) and write in the issue body: "The raw standards doc is at `docs/raw/uds-standards-raw.md`." Either way works; committing it is better for very large docs because nothing gets truncated. |
-| The component kit source (`src/components/ui/*.tsx`) and global CSS / Tailwind theme files | **[A]** | You provide nothing. These are the firm repo's own source files, and because the agent runs *inside* that repo, it can already read every file in it. This is precisely why the agent files must be installed in the kit repo and not somewhere else. If your kit lives at a different path than `src/components/ui/`, say so in the issue body: "Our components are under `packages/ui/src/`." |
+| The raw UDS standards markdown | **[B]** | Best: commit it first as `docs/raw/uds-standards-raw.md` (any path), then your chat prompt just names the path. Alternative: paste the whole markdown into the chat prompt — acceptable for shorter docs, but chat input can truncate very long text, so committed-file is the recommended route. |
+| The component kit source (`src/components/ui/*.tsx`) and global CSS / Tailwind theme files | **[A]** | Nothing to provide — these are files in the repo the agent is running in, readable directly from your clone. If your kit lives at a different path than `src/components/ui/`, say so in the chat prompt: "Our components are under `packages/ui/src/`." |
 
-**Example issue:**
+**Example chat prompt:**
 
-> **Title:** UIJourney setup 1: curate the UDS standards doc
->
-> **Body:**
-> Run as the `standards-curator` agent.
->
-> Below is our raw UDS standards markdown. Clean it into
-> `docs/uds-standards.md` and locate our token source per your
-> instructions.
->
-> \<paste the entire raw standards markdown here\>
+> Run as the standards-curator agent. The raw standards doc is committed at
+> `docs/raw/uds-standards-raw.md`. Clean it into `docs/uds-standards.md`
+> and locate our token source per your instructions.
 
-**What you get back:** a PR. Before merging, read the PR description — the
-agent lists every edit it made (duplicates removed, sections moved). Check
-that no rule you care about was lost, and that `docs/token-source.md` names
-a real CSS file. **Merge the PR before starting agent 2.**
+**What you get back:** edits in your clone, a draft MR raised on push, and
+the MR description printed in chat (paste it into GitLab). Before merging,
+read that description — the agent lists every edit it made. Check no rule
+you care about was lost and that `docs/token-source.md` names a real CSS
+file. **Merge, and pull, before starting agent 2.**
 
 ---
 
 ## Setup agent 2: `design-data-extractor`
 
 **What it does:** writes and runs scripts that read the kit's real source
-code and produce two machine-readable files every later agent depends on:
-`data/tokens.json` (every color/token, resolved to actual values) and
+code and produce the two machine-readable files every later agent depends
+on: `data/tokens.json` (every color/token, resolved to actual values) and
 `data/component-manifest.json` (every component, its variants, its props).
-It also diffs these against the prose standard and reports mismatches.
+It diffs these against the prose standard and reports mismatches, and adds
+a GitLab CI job that fails whenever the kit changes without these files
+being regenerated.
 
-**Inputs and how to provide each one:**
+**Inputs:** all **[A]** — `docs/token-source.md` (merge agent 1 first),
+the kit source, and the standards appendix as diff baseline. Nothing to
+paste.
 
-| Input | Kind | How to provide it — exactly |
-|---|---|---|
-| `docs/token-source.md` | **[A]** | Produced by agent 1. You provide it by having merged agent 1's PR. Nothing to paste. |
-| `src/components/ui/*.tsx` | **[A]** | The repo's own source; nothing to provide. |
-| Standards appendix tables (diff baseline) | **[A]** | Inside `docs/uds-standards.md` from agent 1's merged PR. Nothing to provide. |
+**Example chat prompt:**
 
-**Example issue:**
+> Run as the design-data-extractor agent. Phase 0 is merged and I've pulled
+> latest. Follow your instructions.
 
-> **Title:** UIJourney setup 2: extract tokens and component manifest
->
-> **Body:**
-> Run as the `design-data-extractor` agent. All inputs are in the repo
-> (Phase 0 is merged). Follow your instructions.
-
-**What you get back:** a PR with the scripts, the two `data/*.json` files,
-`data/extraction-report.md`, and a CI job that keeps the data fresh. Before
-merging, open `data/extraction-report.md` in the PR's "Files changed" tab
-and check two things: every component file is listed as parsed (or has an
-explanation), and read the mismatch list — each mismatch is a place where
-your prose doc and your code disagree, and the code is right. **Merge
-before agent 3.**
+**What you get back:** the scripts, the two `data/*.json` files,
+`data/extraction-report.md`, the CI job, as a draft MR. Before merging,
+open `data/extraction-report.md` and check: every component file is listed
+as parsed (or has an explanation), and read the mismatch list — each
+mismatch is a place where the prose doc and the code disagree, and the code
+is right. **Merge and pull before agent 3.**
 
 ---
 
 ## Setup agent 3: `excalidraw-librarian`
 
-**What it does:** renders every component variant in a real browser, measures
-the actual computed styles from the DOM, and generates
-`lib/uds.excalidrawlib` — the approved shape library. One shape per
-component variant, correctly sized and colored, each tagged with metadata
-(`customData`) naming the component/variant/props it represents. All
-mockups are later composed only from these shapes.
+**What it does:** renders every component variant in a real browser on your
+machine, measures the actual computed styles, and generates
+`lib/uds.excalidrawlib` — the approved shape library, one metadata-tagged
+shape per component variant. All mockups are later composed only from
+these shapes.
 
-**Inputs and how to provide each one:**
+**Inputs:** all **[A]** (the `data/*.json` files from agent 2; Storybook if
+the repo has it). Optional **[B]** hint: if you know the repo has no
+Storybook, say "No Storybook here; build the Vite harness" to save the
+agent a search.
 
-| Input | Kind | How to provide it — exactly |
-|---|---|---|
-| `data/tokens.json`, `data/component-manifest.json` | **[A]** | Produced by agent 2; provided by having merged its PR. |
-| A way to render components (Storybook, or a harness the agent builds) | **[A]** | Nothing to provide if the repo has Storybook — the agent detects it. If you know the repo has no Storybook, you can save the agent a search by saying so in the issue body: "No Storybook in this repo; build the Vite harness." Optional. |
+**Example chat prompt:**
 
-**Example issue:**
+> Run as the excalidraw-librarian agent. Phases 0–1 are merged and pulled.
+> Follow your instructions.
 
-> **Title:** UIJourney setup 3: build the UDS Excalidraw shape library
->
-> **Body:**
-> Run as the `excalidraw-librarian` agent. Phases 0–1 are merged. Follow
-> your instructions.
+**Machine note:** this run needs Playwright's Chromium locally — see the
+per-machine setup section above.
 
-**What you get back:** a PR containing `lib/uds.excalidrawlib` plus the
-measure/build scripts. To review it, download `lib/uds.excalidrawlib` from
-the PR, open excalidraw.com, open the **library panel** (the book icon), and
-import the file — you should see one named shape per component variant, in
-the firm's real colors and sizes. Spot-check a few against the live product.
-**Merge before agent 4.**
+**What you get back:** the library plus measure/build scripts as a draft
+MR. To review: take `lib/uds.excalidrawlib` from your working tree, open
+the firm's Excalidraw (or excalidraw.com if permitted), open the library
+panel (book icon), import the file, and spot-check a few shapes against the
+live product. **Merge and pull before agent 4.**
 
 ---
 
@@ -227,143 +262,137 @@ the firm's real colors and sizes. Spot-check a few against the live product.
 **What it does:** builds the enforcement layer — lint rules that make
 non-compliant code fail the build (no raw hex colors, no hand-drawn brand
 logo, no hand-rolled buttons where a kit component exists, no invented
-variants) and a required CI check (`uijourney-compliance`). After this, a
-generated PR *cannot merge* unless it complies; you no longer rely on the
-model behaving.
+variants) and a `uijourney-compliance` job in `.gitlab-ci.yml`. After this,
+a generated MR cannot merge unless it complies.
 
-**Inputs and how to provide each one:**
+**Inputs:** all **[A]**. Nothing to paste.
 
-| Input | Kind | How to provide it — exactly |
-|---|---|---|
-| `data/tokens.json` | **[A]** | From agent 2's merged PR. Nothing to provide. |
-| `docs/uds-standards.md` (the hard rules) | **[A]** | From agent 1's merged PR. Nothing to provide. |
-| Existing ESLint/CI config | **[A]** | The repo's own config files; nothing to provide. |
+**Example chat prompt:**
 
-**Example issue:**
+> Run as the guardrails-engineer agent. Phases 0–2 are merged and pulled.
+> Follow your instructions.
 
-> **Title:** UIJourney setup 4: build the compliance guardrails
->
-> **Body:**
-> Run as the `guardrails-engineer` agent. Phases 0–2 are merged. Follow
-> your instructions.
+**What you get back:** the rules, their tests, `docs/compliance.md`, and
+the CI job, as a draft MR. After merging, one manual step no agent can do:
+in the GitLab project, enable **Settings → Merge requests → "Pipelines
+must succeed"** so the compliance job actually blocks merging.
 
-**What you get back:** a PR with the rules, their tests, `docs/compliance.md`,
-and the CI job. After merging, do one manual step the agent cannot do:
-in repo **Settings → Branches → branch protection rule** for the default
-branch, add `uijourney-compliance` to the **required status checks**. That's
-what makes the gate mandatory.
-
-**Setup is now complete.** Everything from here on is the recurring loop.
+**Setup is complete.** Everything from here is the recurring loop.
 
 ---
 
 ## Journey agent 5: `journey-designer` — run for every new journey
 
-**What it does:** turns your plain-English journey description into
+**What it does:** turns a plain-English journey description into
 `journeys/<name>/journey.excalidraw` — one Excalidraw frame per screen,
 composed only from library shapes, with arrows describing the transitions —
-and opens it as a PR.
+and raises it as a draft MR.
 
 **Inputs and how to provide each one:**
 
 | Input | Kind | How to provide it — exactly |
 |---|---|---|
-| The journey description | **[B]** | Write it in the issue body, in plain English. Be concrete about: the screens you expect, what the user does on each, and what moves them to the next screen. You do not need design vocabulary — "a page where they enter the claim amount and hit submit" is exactly right. The more you specify, the fewer clarifying questions come back. |
-| `lib/uds.excalidrawlib`, `data/component-manifest.json` | **[A]** | From the merged setup PRs. Nothing to provide. |
+| The journey description | **[B]** | Open the GitLab story, copy its description text, and paste it into the chat prompt. The agent cannot look a story up by number — the pasted text is the input. Be concrete about: the screens you expect, what the user does on each, and what moves them to the next screen. Plain language is exactly right; no design vocabulary needed. The agent will ask its clarifying questions in chat before building. |
+| `lib/uds.excalidrawlib`, `data/component-manifest.json` | **[A]** | From the merged setup MRs; pull latest. Nothing to paste. |
 
-**Example issue:**
+**Example chat prompt:**
 
-> **Title:** Journey mockup: submit an expense claim
+> Run as the journey-designer agent. Journey below (from story JIRA-1234 /
+> gitlab#87):
 >
-> **Body:**
-> Run as the `journey-designer` agent.
->
-> Journey: an employee submits an expense claim.
+> An employee submits an expense claim.
 > 1. **Claim entry screen** — amount, category (dropdown), date, receipt
 >    upload, notes. Primary button "Submit claim"; secondary "Save draft".
-> 2. **Review screen** — read-only summary of what they entered, with
->    "Confirm" (primary) and "Back to edit" (secondary).
+> 2. **Review screen** — read-only summary, "Confirm" (primary) and
+>    "Back to edit" (secondary).
 > 3. **Confirmation screen** — success message with the claim reference
 >    number and a "View my claims" link.
 >
 > Transitions: Submit claim → Review; Confirm → Confirmation;
 > Back to edit → Claim entry.
 
-**What you get back:** a PR with the `.excalidraw` file. To review it:
-open the PR's "Files changed" tab, download the file, and open it at
-excalidraw.com (**Open** in the menu) or in VS Code with the Excalidraw
-extension. You can move things, edit labels, delete elements — hand edits
-are expected and survive into the code step. To request bigger changes,
-comment on the PR ("split screen 1 into two steps") and the agent revises
-the same file.
+**What you get back:** a draft MR with the `.excalidraw` file. Review it by
+opening the file (it's in your working tree already) in the VS Code
+Excalidraw extension or the firm's Excalidraw. Move things, edit labels,
+delete elements — hand edits are expected and survive into the code step;
+commit and push them to the same branch. For bigger changes, ask in the
+same chat session ("split screen 1 into two steps") and the agent revises.
+Note that comments made on the MR in GitLab never reach the agent — relay
+them in chat yourself.
 
-**When you're satisfied:** add the **`journey-approved`** label to the PR
-(**[C]** — right-hand sidebar → Labels). Do not merge yet.
+**When satisfied:** add the **`journey-approved`** label to the MR (**[C]**,
+team convention), and move to the next agent — launching it is the real
+approval.
 
 ---
 
-## Journey agent 6: `journey-coder` — run after approval
+## Journey agent 6: `journey-coder` — run after you approve
 
 **What it does:** reads the approved `.excalidraw` file's embedded metadata
-(including your hand edits), and generates the React screens under
+(including your hand edits) and generates the React screens under
 `src/screens/<journey-name>/`, using only kit components, plus a
-`codegen-report.md` accounting for every element it mapped or skipped. It
-pushes to the **same PR** so mockup and code are reviewed and merged
-together. It refuses to run if the `journey-approved` label is missing.
+`codegen-report.md` accounting for every element mapped or skipped. It
+commits to the **same branch** as the mockup MR so diagram and code merge
+together, and iterates until lint and typecheck pass.
 
 **Inputs and how to provide each one:**
 
 | Input | Kind | How to provide it — exactly |
 |---|---|---|
-| The approved mockup PR | **[B]** | In the new issue body, paste the PR number or URL: "Generate code for the approved mockup in PR #42." That reference is the whole input — the agent finds the file from the PR. |
-| The `journey-approved` label on that PR | **[C]** | You added it at the end of the previous step. If you forgot, the agent stops and tells you. |
-| `data/*.json`, the compliance lint | **[A]** | From setup. Nothing to provide. |
+| Which journey/branch | **[B]** | Name it in the chat prompt: "the expense-claim journey on branch `uijourney/journey-expense-claim`". The agent checks that branch out and pulls latest, picking up any hand edits you pushed. |
+| Your approval | — | Launching this agent IS the approval; there is no separate gate. The agent states this assumption once before starting — object if it's wrong. |
+| `data/*.json`, the compliance lint | **[A]** | From setup; pull latest. Nothing to paste. |
 
-**Example issue:**
+**Example chat prompt:**
 
-> **Title:** Generate code: submit an expense claim
->
-> **Body:**
-> Run as the `journey-coder` agent. The approved mockup is PR #42.
+> Run as the journey-coder agent. Generate code for the expense-claim
+> journey on branch `uijourney/journey-expense-claim`. The mockup is
+> approved.
 
-**What you get back:** commits on the mockup PR adding the screens and the
-codegen report, and a single comment summarizing what was generated, what
-(if anything) could not be mapped, and confirming lint + typecheck pass.
-Review it like any code PR. The `uijourney-compliance` check must be green
-before merge — if it isn't, the agent is expected to fix it, not you.
+**What you get back:** commits on the mockup branch adding the screens and
+the codegen report, pushed to the existing MR, plus a summary in chat
+(paste it as an MR comment for the record): what was generated, anything
+unmapped, and confirmation lint + typecheck pass. The
+`uijourney-compliance` pipeline job must be green before merge — if it
+fails on the MR, relay the failure into chat and the agent fixes it; don't
+hand-patch or disable rules.
 
-If you edit the mockup again while the PR is open, tell the coder in a PR
-comment ("scene updated, please regenerate") — the diagram remains the
-source of truth until the PR merges.
+If you edit the mockup again while the MR is open, tell the coder in chat
+("scene updated, please regenerate") — the diagram is the source of truth
+until merge.
 
 ---
 
 ## When the component kit changes later
 
-The CI freshness job from setup fails whenever someone changes
-`src/components/ui/` or the token CSS without regenerating the derived
-files. When that happens, either run locally:
+The CI freshness job fails whenever someone changes `src/components/ui/`
+or the token CSS without regenerating the derived files. Fix by running:
 
 ```
 npm run uijourney:extract && npm run uijourney:library
 ```
 
-and commit the result, or open an issue for `design-data-extractor` and then
-`excalidraw-librarian` to do the same. Re-run `standards-curator` only when
-the prose standard itself is rewritten.
+and committing, or by launching `design-data-extractor` then
+`excalidraw-librarian` again. Re-run `standards-curator` only when the
+prose standard itself is rewritten.
 
 ## Troubleshooting
 
-- **The agent says an input file is missing.** You skipped a setup phase or
-  didn't merge its PR. The message names the file; the tables above name
-  which agent produces it. Run that agent first.
-- **There's no agent picker when assigning to Copilot.** Your Copilot plan
-  or firm policy may not expose custom agent selection. Fallback: put
-  `Use the agent defined in .github/agents/<name>.md and follow it exactly.`
-  as the first line of the issue body — the instructions still govern the
-  run.
-- **`journey-coder` refuses to run.** Check the mockup PR has the
-  `journey-approved` label — that refusal is deliberate.
-- **The compliance check fails on a generated PR.** Comment on the PR asking
-  the coder agent to fix its lint failures; do not hand-patch or disable
-  rules. If a *rule* is wrong, that's an issue for `guardrails-engineer`.
+- **The agent says an input file is missing.** A setup phase wasn't merged,
+  or you haven't pulled. The message names the file; the tables above name
+  the agent that produces it.
+- **No UIJourney agents in the VS Code agent picker.** Update the Copilot
+  extension; meanwhile use the fallback: attach the agent's file from
+  `.github/agents/` to the chat and start with "Follow the attached agent
+  instructions exactly."
+- **The push succeeded but no MR appeared.** Push options require the
+  GitLab server to act; check the push output — GitLab prints the MR URL
+  on success. If your firm's GitLab version/config ignores push options,
+  create the MR by hand in the UI from the pushed branch (everything else
+  is unaffected).
+- **The agent refused to start because the tree wasn't clean.** That's
+  deliberate — commit or stash your own work first so agent output doesn't
+  mix with it.
+- **The compliance job fails on a generated MR.** Paste the job log into
+  the coder agent's chat and have it fix its own lint failures. If a *rule*
+  is wrong, that's a task for `guardrails-engineer`.

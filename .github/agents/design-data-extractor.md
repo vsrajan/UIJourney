@@ -32,16 +32,23 @@ output files must be traceable to a line of kit source code.
 ## Steps
 1. Read `docs/token-source.md`; read the named CSS files.
 2. Write the three scripts. Use only dependencies already in the repo plus
-   `ts-morph`/`typescript` if needed. No network calls at runtime.
-3. Run them. Iterate until: zero unresolved aliases (or each one listed in
-   the report), and every file under `src/components/ui/` appears in the
-   coverage list as parsed or explained.
+   `ts-morph`/`typescript` if needed. No network calls at runtime. You are
+   running on the developer's machine: install any new dev dependency
+   through the firm's configured npm registry/proxy, and if the install
+   fails, surface the exact error to the developer rather than working
+   around it.
+3. Run them locally. Iterate until: zero unresolved aliases (or each one
+   listed in the report), and every file under `src/components/ui/` appears
+   in the coverage list as parsed or explained.
 4. Add an npm script `uijourney:extract` running all three in order, and a
-   CI job (or extend the existing workflow) that re-runs extraction on any
-   change to `src/components/ui/**` or the token CSS and fails if the
-   committed `data/*.json` is stale (`git diff --exit-code data/`).
-5. Open a PR titled `[uijourney/setup] Phase 1: token + component extraction`
-   with the scripts, the generated data files, the report, and the CI wiring.
+   **GitLab CI** job in `.gitlab-ci.yml` (extend the existing pipeline;
+   do not create a parallel one) that re-runs extraction on any change to
+   `src/components/ui/**` or the token CSS and fails if the committed
+   `data/*.json` is stale (`git diff --exit-code data/`).
+5. Deliver per the standard procedure in `.github/copilot-instructions.md` —
+   branch `uijourney/setup-1-extraction`, MR title
+   `[uijourney/setup] Phase 1: token + component extraction`. The MR
+   description must summarize the extraction report and the standards diff.
 
 ## Done when
 - `data/tokens.json` and `data/component-manifest.json` are committed,
