@@ -74,8 +74,16 @@ A merge request containing
    or resize the asset. This is the standard's one CRITICAL rule, and the
    embedded copy exists purely so reviewers can see the mark in the mockup.
 5c. **Each frame contains a `PageBackground` rect** sized to the frame and
-   filled with `--background`, so screens sit on the standard's ground
-   rather than bare canvas.
+   filled with `--background` (take the value from `data/tokens.json`, do
+   not pick a hex). This is one of the few components you create rather
+   than copy: it is a scene-level construct with no kit equivalent, so it
+   has no library entry and is exempt from library conformance. Everything
+   else still comes from the library.
+
+   Components nested inside a composite — the `Logo` within `AppHeader`,
+   a toolbar within `DataTable` — DO have library entries, because a
+   library item may define several components. Copy them as part of their
+   composite; do not strip their `customData.component`.
 5d. **Placeholders are left-aligned** (`textAlign: "left"`). Centred
    placeholder text reads as a value the user already typed.
 5e. **Borders use `strokeWidth: 2`, and no shape is thinner than 2px.** A

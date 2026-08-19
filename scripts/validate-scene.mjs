@@ -108,18 +108,32 @@ for (const f of frames) {
   }
 }
 
-// Index the library (if given): component/variant -> container geometry + resize hint.
+// Index the library (if given): component/variant -> element geometry + resize hint.
+//
+// Every component-bearing element in an item is indexed, not just the first.
+// A composite is a group that legitimately defines more than one component —
+// AppHeader contains the Logo image, DataTable contains its toolbar and
+// pagination — and indexing only the first left those nested components
+// unregistered, so a scene that used them failed library conformance while
+// the per-frame rules simultaneously demanded them. That deadlock had no
+// escape that did not involve falsifying metadata.
 let libIndex = null;
 if (libPath) {
   libIndex = new Map();
   for (const item of (parse(libPath).libraryItems ?? [])) {
-    const c = (item.elements ?? []).find((e) => e.type !== "text" && e.customData?.component)
-      ?? (item.elements ?? []).find((e) => e.customData?.component);
-    if (!c) continue;
-    const key = `${c.customData.component}/${c.customData.variant ?? "default"}`;
-    if (!libIndex.has(key)) libIndex.set(key, c);
+    for (const c of item.elements ?? []) {
+      if (!c.customData?.component) continue;
+      if (c.type === "text" && c.containerId) continue; // bound labels are not components
+      const key = `${c.customData.component}/${c.customData.variant ?? "default"}`;
+      if (!libIndex.has(key)) libIndex.set(key, c);
+    }
   }
 }
+
+// Constructs the designer creates per screen that are deliberately not kit
+// components, so they have no library entry and are exempt from library
+// conformance. They are still checked by their own rules below.
+const SCENE_ONLY_COMPONENTS = new Set(["PageBackground"]);
 
 const PLACEHOLDER_HOSTS = new Set(["Input", "Textarea", "Select", "Combobox"]);
 
@@ -216,7 +230,7 @@ for (const el of els) {
   }
 
   // Library conformance.
-  if (libIndex && cd.component && el.type !== "text") {
+  if (libIndex && cd.component && el.type !== "text" && !SCENE_ONLY_COMPONENTS.has(cd.component)) {
     const key = `${cd.component}/${cd.variant ?? "default"}`;
     const libEl = libIndex.get(key);
     if (!libEl) {
@@ -297,8 +311,16 @@ for (const f of frames) {
   const bg = inFrame.find((e) => e.customData?.component === "PageBackground");
   if (!bg) {
     errors.push(`frame "${f.name}" has no PageBackground element — screens must sit on the standard's --background, not bare canvas`);
-  } else if (Math.abs(bg.width - f.width) > 2 || Math.abs(bg.height - f.height) > 2) {
-    warns.push(`frame "${f.name}": PageBackground is ${bg.width}x${bg.height} but the frame is ${f.width}x${f.height}`);
+  } else {
+    if (Math.abs(bg.width - f.width) > 2 || Math.abs(bg.height - f.height) > 2) {
+      warns.push(`frame "${f.name}": PageBackground is ${bg.width}x${bg.height} but the frame is ${f.width}x${f.height}`);
+    }
+    // PageBackground has no library entry to copy a colour from, so check the
+    // token directly rather than letting the designer pick a hex.
+    const expected = resolveColor("--background");
+    if (expected && (bg.backgroundColor ?? "").toUpperCase() !== expected) {
+      errors.push(`frame "${f.name}": PageBackground fill ${bg.backgroundColor} is not --background (${expected})`);
+    }
   }
 
   // Free text must not collide with separators or other free text.
