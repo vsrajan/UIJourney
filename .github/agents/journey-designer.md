@@ -49,6 +49,34 @@ A merge request containing
 5. **Metadata lives on the container element only.** Never copy
    `customData.component` onto a bound text (the library is built this
    way — keep it so). Every text element uses `fontFamily: 2`.
+5a. **Bound text carries real coordinates.** Excalidraw honours a bound
+   label's stored `x`/`y` when the file is opened and only recomputes them
+   once the container is edited. A label written at `0,0` therefore renders
+   at the canvas origin instead of on its button — a pilot login screen
+   shipped with every placeholder and button label piled in the top-left
+   corner. Position each bound label centred within its container.
+5b. **The logo is an element, never a flag.** `props: { logo: true }` on an
+   AppHeader draws nothing. Every screen with an app header contains a
+   separate element with `customData.component: "Logo"` carrying
+   `props.src` set to the sanctioned URL from `docs/uds-standards.md`,
+   placed on the left of the header. This is the standard's one CRITICAL
+   rule.
+5c. **Each frame contains a `PageBackground` rect** sized to the frame and
+   filled with `--background`, so screens sit on the standard's ground
+   rather than bare canvas.
+5d. **Placeholders are left-aligned** (`textAlign: "left"`). Centred
+   placeholder text reads as a value the user already typed.
+5e. **Borders use `strokeWidth: 2`, and no shape is thinner than 2px.** A
+   1px near-white stroke rasterises away at the zoom Excalidraw picks when
+   fitting a journey to screen — the mockup looks borderless to reviewers
+   even though the data is correct. The `tokens` record still names
+   `--border`; the extra width is a wireframe legibility affordance, not a
+   claim about the component's CSS.
+5f. **An "or" divider is two separator segments with a gap for the label** —
+   never one full-width line with text laid over it.
+5g. **Text colours follow `lib/typography.json`.** A `Link` uses the `link`
+   role's colour (`--primary`); rendered in body colour it does not read as
+   a link at all.
 6. Transitions are **arrows between frames** with
    `customData: { transition: { from: <step>, to: <step>, trigger:
    "<component ref or event>", condition: "<optional>" } }` and a text
@@ -65,12 +93,17 @@ A merge request containing
 
 ## Steps
 1. Parse the journey into screens, per-screen components, and transitions.
+   **Build the screens the developer asked for and no others.** A pilot run
+   asked for "a simple login screen" and got an invented Dashboard screen
+   alongside it. If a transition needs a destination that was not
+   requested, ask in chat rather than inventing one.
    The developer is present in chat: if the description is ambiguous about
    a screen's purpose or a decision branch, ask your clarifying questions
    in chat now, before building — consolidated, not a drip-feed.
 2. Build the scene per the contract, then **run
    `node scripts/validate-scene.mjs journeys/<name>/journey.excalidraw
-   lib/uds.excalidrawlib` and fix every ERROR before delivering** — it
+   lib/uds.excalidrawlib --typography lib/typography.json --tokens
+   data/tokens.json` and fix every ERROR before delivering** — it
    mechanically enforces the contract above (valid JSON, fontFamily,
    annotation misuse, metadata placement, text-fits-container, library
    conformance, transition integrity). Explain any WARNs in the MR

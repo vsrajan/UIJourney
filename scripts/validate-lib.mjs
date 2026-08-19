@@ -210,6 +210,25 @@ for (const item of lib.libraryItems ?? []) {
   if (component === "Switch" && !els.some((e) => e.type === "ellipse")) {
     warns.push(`${name}: Switch should show a pill track + circle thumb (no ellipse found)`);
   }
+
+  // Borders must survive rasterisation. A 1px near-white hairline disappears
+  // at the zoom Excalidraw picks when fitting a journey to screen (confirmed
+  // in the field: invisible at fit, visible at 200%). Keep the token record
+  // as --border; the stroke width is a wireframe legibility affordance.
+  for (const el of els) {
+    if (el.type === "text" || el.type === "frame") continue;
+    const thin = Math.min(el.width ?? 0, el.height ?? 0) <= 4;
+    const stroked = el.strokeColor && el.strokeColor !== "transparent" && el.strokeColor !== "#00000000";
+    if (thin) {
+      // Hairline rules (Separator, Progress track) are drawn by their fill,
+      // so they need real thickness rather than a thicker stroke.
+      if (Math.min(el.width ?? 0, el.height ?? 0) < 2) {
+        warns.push(`${name}: shape is under 2px thick — hairlines disappear at fit-to-screen zoom; give it 2px`);
+      }
+    } else if (stroked && (el.strokeWidth ?? 1) < 2) {
+      errors.push(`${name}: bordered shape has strokeWidth ${el.strokeWidth ?? 1} — use 2; 1px light strokes vanish when Excalidraw fits a journey to screen`);
+    }
+  }
   if (container && container.type !== "text" && !container.customData?.resize) {
     warns.push(`${name}: container has no customData.resize hint ("horizontal" | "both" | "none") — designers won't know what they may stretch`);
   }

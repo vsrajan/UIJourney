@@ -2,27 +2,42 @@
 // Validates a journey .excalidraw scene against the scene contract in
 // .github/agents/journey-designer.md. No dependencies.
 //
-//   node scripts/validate-scene.mjs journeys/<name>/journey.excalidraw [lib/uds.excalidrawlib]
+//   node scripts/validate-scene.mjs journeys/<name>/journey.excalidraw \
+//     [lib/uds.excalidrawlib] [--typography lib/typography.json] [--tokens data/tokens.json]
 //
-// Pass the library as the second argument to also check that every component
-// element matches a library entry (component+variant exists; fixed-size
-// shapes not resized).
+// Pass the library to also check that every component element matches a
+// library entry (component+variant exists; fixed-size shapes not resized).
 //
 // Exits 1 on any ERROR. WARNs list items the developer should eyeball.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
-const scenePath = process.argv[2];
-const libPath = process.argv[3];
+const argv = process.argv.slice(2);
+const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--")));
+const scenePath = positional[0];
+const libPath = positional[1];
+function optFlag(name, fallback) {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
+}
+const typographyPath = optFlag("typography", "lib/typography.json");
+const tokensPath = optFlag("tokens", "data/tokens.json");
 if (!scenePath) {
-  console.error("usage: node scripts/validate-scene.mjs <journey.excalidraw> [uds.excalidrawlib]");
+  console.error("usage: node scripts/validate-scene.mjs <journey.excalidraw> [uds.excalidrawlib] [--typography p] [--tokens p]");
   process.exit(2);
 }
 
 const errors = [];
 const warns = [];
 
-function parse(p) {
+function parse(p, required = true) {
+  if (!existsSync(p)) {
+    if (required) {
+      console.error(`ERROR: ${p} not found`);
+      process.exit(1);
+    }
+    return null;
+  }
   try {
     return JSON.parse(readFileSync(p, "utf8"));
   } catch (e) {
@@ -35,17 +50,51 @@ const scene = parse(scenePath);
 const els = scene.elements ?? [];
 const byId = Object.fromEntries(els.map((e) => [e.id, e]));
 
-// Index the library (if given): component/variant -> container geometry + resize hint.
-let libIndex = null;
-if (libPath) {
-  libIndex = new Map();
-  for (const item of parse(libPath).libraryItems ?? []) {
-    const c = (item.elements ?? []).find((e) => e.type !== "text" && e.customData?.component);
-    if (!c) continue;
-    const key = `${c.customData.component}/${c.customData.variant ?? "default"}`;
-    if (!libIndex.has(key)) libIndex.set(key, c);
+const typography = parse(typographyPath, false);
+const tokens = parse(tokensPath, false);
+if (!typography) warns.push(`no typography spec at ${typographyPath} — text colors and sizes cannot be checked`);
+
+// Resolve a semantic alias (--primary) to a hex value via tokens.json.
+// tokens.json shape varies by extractor, so try the plausible layouts and
+// degrade to a warning rather than a false error when nothing resolves.
+let tokenResolutionFailed = false;
+function resolveColor(alias) {
+  if (!alias) return null;
+  if (/^#/.test(alias)) return alias.toUpperCase();
+  if (!tokens) return null;
+  const bare = alias.replace(/^--/, "");
+  const buckets = [
+    tokens.semantic?.light, tokens.semantic, tokens.aliases, tokens.light,
+    tokens.colors, tokens.primitives, tokens,
+  ];
+  for (const b of buckets) {
+    if (!b || typeof b !== "object") continue;
+    const v = b[alias] ?? b[bare];
+    if (typeof v === "string" && /^#/.test(v)) return v.toUpperCase();
+    if (v && typeof v === "object" && typeof v.value === "string" && /^#/.test(v.value)) return v.value.toUpperCase();
   }
+  tokenResolutionFailed = true;
+  return null;
 }
+function typographySpec(tokenName) {
+  if (!typography || !tokenName) return null;
+  const scale = typography.scale ?? {};
+  const roles = typography.roles ?? {};
+  if (scale[tokenName]) return { ...scale[tokenName] };
+  const role = roles[tokenName];
+  if (role) {
+    const base = role.basedOn ? scale[role.basedOn] : null;
+    return base ? { ...base, ...role } : { ...role };
+  }
+  return null;
+}
+
+// Minimum stroke width for a visible border. A 1px near-white hairline
+// rasterizes away at the zoom Excalidraw picks when fitting a full journey
+// to screen — confirmed in the field: borders invisible at fit, visible at
+// 200%. The token record stays --border; this is a legibility affordance of
+// the wireframe, not a claim about the real component's CSS.
+const MIN_BORDER_STROKE_WIDTH = 2;
 
 const frames = els.filter((e) => e.type === "frame");
 if (frames.length === 0) errors.push("no frames — each screen must be a frame named 'Screen: <Name>'");
@@ -58,6 +107,21 @@ for (const f of frames) {
     steps.add(cd.journeyStep);
   }
 }
+
+// Index the library (if given): component/variant -> container geometry + resize hint.
+let libIndex = null;
+if (libPath) {
+  libIndex = new Map();
+  for (const item of (parse(libPath).libraryItems ?? [])) {
+    const c = (item.elements ?? []).find((e) => e.type !== "text" && e.customData?.component)
+      ?? (item.elements ?? []).find((e) => e.customData?.component);
+    if (!c) continue;
+    const key = `${c.customData.component}/${c.customData.variant ?? "default"}`;
+    if (!libIndex.has(key)) libIndex.set(key, c);
+  }
+}
+
+const PLACEHOLDER_HOSTS = new Set(["Input", "Textarea", "Select", "Combobox"]);
 
 for (const el of els) {
   const cd = el.customData ?? {};
@@ -72,26 +136,83 @@ for (const el of els) {
     errors.push(`bound text ${label} re-declares customData.component — metadata belongs on the container only`);
   }
 
-  // Bound text must fit.
   if (el.type === "text" && el.containerId && byId[el.containerId]) {
     const c = byId[el.containerId];
     if (c.type !== "arrow" && (el.width > c.width || el.height > c.height)) {
       errors.push(`bound text ${label} ${el.width}x${el.height} exceeds container ${c.width}x${c.height}`);
     }
+
+    // Bound text must carry real coordinates. Excalidraw honours the stored
+    // x/y on import and only recomputes them when the container is edited —
+    // so a bound label written at 0,0 renders at the canvas origin, not on
+    // its button. This silently wrecked a pilot login screen.
+    if (c.type !== "arrow") {
+      const cx = el.x + (el.width ?? 0) / 2;
+      const cy = el.y + (el.height ?? 0) / 2;
+      const inside = cx >= c.x - 2 && cx <= c.x + c.width + 2 && cy >= c.y - 2 && cy <= c.y + c.height + 2;
+      if (!inside) {
+        errors.push(
+          `bound text ${label} sits at (${el.x}, ${el.y}), outside its container at (${c.x}, ${c.y}) ${c.width}x${c.height} — ` +
+            `Excalidraw renders bound text at its stored coordinates on import, so this label will appear detached from its component`
+        );
+      }
+    }
+  }
+
+  // Placeholders read as typed values unless they are left-aligned.
+  if (el.type === "text" && el.containerId && byId[el.containerId]) {
+    const host = byId[el.containerId].customData?.component;
+    if (PLACEHOLDER_HOSTS.has(host) && el.textAlign !== "left") {
+      errors.push(`${host} placeholder ${label} has textAlign "${el.textAlign}" — placeholders are left-aligned; centred text reads as an entered value`);
+    }
+  }
+
+  // Borders must survive rasterisation at fit-to-screen zoom.
+  if (el.type !== "text" && el.type !== "frame" && el.type !== "arrow" && cd.component) {
+    const thin = Math.min(el.width ?? 0, el.height ?? 0) <= 4;
+    const stroked = el.strokeColor && el.strokeColor !== "transparent" && el.strokeColor !== "#00000000";
+    if (thin) {
+      // A hairline rule (Separator, Progress track) is drawn by its fill, not
+      // its stroke — thickening the stroke is meaningless. It has the same
+      // vanishing problem though, so it needs real thickness instead.
+      if (Math.min(el.width ?? 0, el.height ?? 0) < 2) {
+        warns.push(`${cd.component} ${label} is under 2px thick — hairlines disappear when Excalidraw fits the journey to screen; give it 2px`);
+      }
+    } else if (stroked && (el.strokeWidth ?? 1) < MIN_BORDER_STROKE_WIDTH) {
+      errors.push(`${cd.component} ${label} has a visible border at strokeWidth ${el.strokeWidth ?? 1} — use ${MIN_BORDER_STROKE_WIDTH}; 1px light strokes vanish when Excalidraw fits the journey to screen`);
+    }
   }
 
   // annotation is for reviewer notes only — never for screen copy or layout.
-  if (cd.annotation) {
-    if (el.frameId && el.type === "text") {
+  if (cd.annotation && el.frameId) {
+    if (el.type === "text") {
       errors.push(`text ${label} inside a frame is marked annotation:true — visible screen copy must be a component (Text/Heading/Label/...) or codegen silently drops it`);
-    } else if (el.frameId && el.type === "rectangle") {
+    } else if (el.type === "rectangle") {
       errors.push(`rectangle ${label} inside a frame is marked annotation:true — structural regions must be components (Card/Table/AppHeader/...) or codegen silently drops them`);
     }
   }
 
-  // Everything visible inside a frame needs a classification.
   if (el.frameId && !cd.annotation && !cd.component && !cd.transition && el.type !== "frame") {
     errors.push(`${label} inside a frame has no customData at all — codegen cannot map it`);
+  }
+
+  // Typography conformance: size, weight and colour.
+  if (el.type === "text" && cd.typography) {
+    const spec = typographySpec(cd.typography);
+    if (!spec) {
+      errors.push(`text ${label}: customData.typography "${cd.typography}" is not defined in ${typographyPath}`);
+    } else {
+      if (spec.fontSize != null && Math.abs(el.fontSize - spec.fontSize) > 0.5) {
+        errors.push(`text ${label}: ${cd.typography} fontSize ${el.fontSize} does not match the type scale (${spec.fontSize})`);
+      }
+      if (spec.fontWeight != null && Number(cd.fontWeight) !== Number(spec.fontWeight)) {
+        errors.push(`text ${label}: ${cd.typography} fontWeight ${cd.fontWeight} does not match the type scale (${spec.fontWeight})`);
+      }
+      const expected = resolveColor(spec.color);
+      if (expected && (el.strokeColor ?? "").toUpperCase() !== expected) {
+        errors.push(`text ${label}: ${cd.typography} colour ${el.strokeColor} does not match ${spec.color} (${expected}) — a Link rendered in body colour does not read as a link`);
+      }
+    }
   }
 
   // Library conformance.
@@ -114,7 +235,8 @@ for (const el of els) {
   }
 }
 
-// Transition arrows.
+// ------------------------------------------------------------ transitions
+
 const arrows = els.filter((e) => e.type === "arrow");
 if (frames.length > 1 && arrows.length === 0) warns.push("multiple screens but no transition arrows");
 for (const a of arrows) {
@@ -126,14 +248,66 @@ for (const a of arrows) {
   }
 }
 
-// Logo: any frame with an AppHeader must contain a Logo/AppHeader logo element.
+// ------------------------------------------------------------- per-frame
+
+function overlaps(a, b) {
+  return (
+    a.x < b.x + (b.width ?? 0) &&
+    a.x + (a.width ?? 0) > b.x &&
+    a.y < b.y + (b.height ?? 0) &&
+    a.y + (a.height ?? 0) > b.y
+  );
+}
+
 for (const f of frames) {
   const inFrame = els.filter((e) => e.frameId === f.id);
-  const hasHeader = inFrame.some((e) => e.customData?.component === "AppHeader");
-  const hasLogo = inFrame.some((e) => ["Logo", "AppHeader"].includes(e.customData?.component) && (e.customData?.props?.logo || e.customData?.component === "Logo"));
-  if (hasHeader && !hasLogo) {
-    warns.push(`frame "${f.name}" has an AppHeader but no Logo element — the standard requires the logo on the left of app headers`);
+
+  // The logo is the standard's one CRITICAL rule. A boolean prop is not a
+  // logo — the scene must contain a real Logo element carrying the
+  // sanctioned image URL, or the screen ships without the brand mark.
+  const header = inFrame.find((e) => e.customData?.component === "AppHeader");
+  const logo = inFrame.find((e) => e.customData?.component === "Logo");
+  if (header && !logo) {
+    errors.push(`frame "${f.name}" has an AppHeader but no element with customData.component "Logo" — props.logo:true is a flag, not a brand mark`);
   }
+  if (logo) {
+    const src = logo.customData?.props?.src;
+    if (!src) {
+      errors.push(`frame "${f.name}": Logo element carries no props.src — it must reference the sanctioned image URL from docs/uds-standards.md`);
+    }
+    if (header && logo.x > header.x + header.width / 2) {
+      warns.push(`frame "${f.name}": Logo sits in the right half of the header — the standard places it on the left`);
+    }
+  }
+
+  // Every screen needs the standard's ground.
+  const bg = inFrame.find((e) => e.customData?.component === "PageBackground");
+  if (!bg) {
+    errors.push(`frame "${f.name}" has no PageBackground element — screens must sit on the standard's --background, not bare canvas`);
+  } else if (Math.abs(bg.width - f.width) > 2 || Math.abs(bg.height - f.height) > 2) {
+    warns.push(`frame "${f.name}": PageBackground is ${bg.width}x${bg.height} but the frame is ${f.width}x${f.height}`);
+  }
+
+  // Free text must not collide with separators or other free text.
+  const freeText = inFrame.filter((e) => e.type === "text" && !e.containerId);
+  const separators = inFrame.filter((e) => e.customData?.component === "Separator");
+  for (const t of freeText) {
+    for (const s of separators) {
+      if (overlaps(t, s)) {
+        errors.push(`text "${t.text}" overlaps a Separator — an "or" divider is two separator segments with a gap for the label, not one line with text laid over it`);
+      }
+    }
+    for (const other of freeText) {
+      if (other.id <= t.id) continue;
+      if (overlaps(t, other)) {
+        warns.push(`text "${t.text}" and "${other.text}" overlap`);
+      }
+    }
+  }
+}
+
+if (tokenResolutionFailed) {
+  warns.push(`could not resolve some semantic colours via ${tokensPath} — colour conformance was skipped for those tokens`);
 }
 
 for (const w of warns) console.log(`WARN:  ${w}`);
