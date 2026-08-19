@@ -56,6 +56,7 @@ const skipComponents = skips.components ?? {};
 const skipCombinations = skips.combinations ?? {};
 const skipTypography = skips.typography ?? {};
 for (const [k, v] of Object.entries({ ...skipComponents, ...skipCombinations, ...skipTypography })) {
+  if (k.startsWith("$")) continue; // $comment / $note keys document the file
   if (!v || !v.reason) errors.push(`skips.json entry "${k}" has no reason — every deferral must be justified in writing`);
 }
 
