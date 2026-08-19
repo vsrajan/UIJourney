@@ -109,7 +109,8 @@ Setup (run once, re-run when the kit or standards change):
 `guardrails-engineer`.
 
 Recurring, per user journey:
-`journey-designer` (story → mockup MR) → developer reviews the mockup and,
+`journey-sketcher` (story → spec + preview, seconds per iteration) →
+`journey-designer` (spec → validated mockup MR) → developer reviews and,
 when satisfied, launches `journey-coder` on the same branch (launching the
 coder IS the approval — the developer is trusted; the `journey-approved`
 GitLab label on the MR is a process convention for humans, not a gate the

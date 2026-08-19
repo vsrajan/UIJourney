@@ -1,6 +1,6 @@
 # UIJourney agent workflow
 
-How the six custom Copilot agents in `.github/agents/` chain together in
+How the seven custom Copilot agents in `.github/agents/` chain together in
 the firm's environment: code hosted on **GitLab**, agents run in **VS Code
 Copilot agent mode** on the developer's machine, output delivered as
 **GitLab merge requests** raised by the agent via git push options.
@@ -63,7 +63,11 @@ changes.
 
 ```
 developer copies the GitLab story text
-        │  VS Code chat → agent: journey-designer → paste story
+        │  VS Code chat → agent: journey-sketcher → paste story
+        ▼
+spec.json + PNG preview in seconds  ──▶ iterate on the spec, not the scene
+        │  when the shape is right:
+        │  VS Code chat → agent: journey-designer → "use the approved spec"
         ▼
 draft MR with journeys/<name>/journey.excalidraw    ←──┐
         │                                              │ revision requests in

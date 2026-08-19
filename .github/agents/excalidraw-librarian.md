@@ -217,6 +217,24 @@ with bucket `overlay`.
 3. Build the library: measured glyphs for kit components (full axis cross
    product), data-driven glyphs for typography, hand-assembled composites
    for Table/Card/AppHeader. Update `lib/skips.json` for anything omitted.
+3a. **Emit `lib/index.json`, the compact catalogue.** The full library runs
+   to hundreds of kilobytes, and the designer agents must never load it —
+   a prior run read it three times and spent twenty minutes on one login
+   screen. The index is what they read instead: one row per entry, a few
+   kilobytes total.
+
+   ```json
+   { "Button/default":   { "width": 162, "height": 32, "resize": "horizontal",
+                           "sizes": ["default","xs","sm","lg","icon"],
+                           "tokens": { "backgroundColor": "--primary" } },
+     "AppHeader/default":{ "width": 800, "height": 56, "resize": "horizontal",
+                           "contains": ["Logo", "Text"] } }
+   ```
+
+   Include every entry, its anchor size, its `resize` hint, the components a
+   composite `contains`, and the semantic tokens it consumes. Omit
+   geometry detail, element arrays and anything base64. Regenerate it in the
+   same script run as the library so the two cannot drift.
 4. **Run `node scripts/validate-lib.mjs lib/uds.excalidrawlib` and fix
    every ERROR before delivering.** Explain remaining WARNs in the MR
    description. Never edit the validator to make it pass.

@@ -129,10 +129,12 @@ the GitLab UI.
 
 1. Copy from this template into the firm's kit repo, keeping paths exactly:
    - `.github/copilot-instructions.md`
-   - `.github/agents/` (all six files)
-   - `scripts/validate-lib.mjs` and `scripts/validate-scene.mjs` (the
-     mechanical quality gates the library and every mockup must pass —
-     plain Node, no dependencies)
+   - `.github/agents/` (all seven files)
+   - `scripts/` (all of it — the mechanical quality gates and generators:
+     `validate-lib.mjs`, `validate-scene.mjs`, `diff-manifest.mjs`,
+     `embed-logo.mjs`, `compose-scene.mjs`, `render-scene.mjs`. Plain Node,
+     no dependencies except Playwright, which only the PNG preview needs)
+   - `docs/spec-schema.md` (the screen-spec format the agents write)
    - `lib/typography.json` (the UDS type scale — **verify its values against
      your standards doc before the first library build**; it is transcribed
      from prose, not extracted from CSS) and `lib/skips.json` (the declared
