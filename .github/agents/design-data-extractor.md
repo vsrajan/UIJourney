@@ -26,12 +26,19 @@ output files must be traceable to a line of kit source code.
      "components": {
        "Button": {
          "file": "src/components/ui/Button.tsx",
+         "role": "root",
          "exports": ["Button", "buttonVariants"],
          "variants": {
            "variant": ["default", "primary", "secondary", "positive", "negative", "ghost"],
            "size": ["default", "xs", "sm", "lg", "icon", "icon-xs", "icon-sm", "icon-lg"]
          },
          "defaultVariants": { "variant": "default", "size": "default" }
+       },
+       "DataTableToolbar": {
+         "file": "src/components/ui/DataTable.tsx",
+         "role": "part",
+         "partOf": "DataTable",
+         "variants": {}
        }
      }
    }
@@ -41,6 +48,23 @@ output files must be traceable to a line of kit source code.
    `cva()` — those simply have `"variants": {}`. A component missing from
    the manifest is invisible to every later phase, and the library agent
    treats the manifest as its work list.
+
+   **Tag every entry `role: "root"` or `role: "part"`.** A *root* is a
+   component an application author imports and places on its own (Button,
+   Input, DataTable, DatePicker, Dialog). A *part* is a piece of a compound
+   component that only ever appears inside its root — `TableRow`,
+   `CardHeader`, `DialogFooter`, `DataTableToolbar`, `DatePickerCalendar` —
+   and carries `partOf` naming that root. Determine this from usage, not
+   from the export list: if it is meaningless outside a parent, it is a
+   part.
+
+   This distinction drives library coverage: roots need a glyph, parts are
+   drawn inside their root's composite glyph and are not counted. Getting
+   it wrong in either direction is costly — a pilot run tagged nothing,
+   so `DataTable` and `DatePicker` were skipped alongside their 22 internal
+   parts, leaving journeys with no enterprise table or date field, while
+   the coverage figure (32/65) was diluted by parts that never needed
+   entries at all.
 3. `scripts/diff-standards.mjs` — compares `data/tokens.json` against the
    value tables in the standards doc appendix; prints every mismatch and
    every token referenced by an alias but never defined (a known real case:

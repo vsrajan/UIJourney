@@ -84,7 +84,14 @@ function loadManifest(p) {
         else if (vals && typeof vals === "object") axes[axis] = Object.keys(vals);
       }
     }
-    out.set(name, { axes, defaults: def.defaultVariants ?? def.defaults ?? {} });
+    out.set(name, {
+      axes,
+      defaults: def.defaultVariants ?? def.defaults ?? {},
+      // Untagged entries are treated as roots: a missing tag must fail loudly
+      // (as a coverage error) rather than silently excuse a component.
+      role: def.role === "part" ? "part" : "root",
+      partOf: def.partOf ?? null,
+    });
   }
   return out;
 }
@@ -98,6 +105,26 @@ if (!manifest) {
 
 // Composites the contract requires even though no kit component exists for them.
 const REQUIRED_COMPOSITES = ["AppHeader", "Heading", "Text", "Link"];
+
+// How an entry came to exist. Recorded on the container as customData.source
+// so derived entries can never masquerade as measured ones.
+const SOURCES = new Set(["measured", "typography", "composite"]);
+
+// Measured geometry, keyed by component -> array of rows carrying the axis
+// values plus the measured values. Optional; when present, every "measured"
+// entry must have a matching row.
+const measurementsPath = flag("measurements", "data/measurements.json");
+const measurements = existsSync(measurementsPath) ? readJson(measurementsPath, "measurements") : null;
+if (!measurements) {
+  warns.push(`no measurements at ${measurementsPath} — cannot verify that "measured" entries were actually measured rather than derived`);
+}
+function measuredRowExists(component, axes, props) {
+  if (!measurements) return true;
+  const rows = Array.isArray(measurements) ? measurements.filter((r) => (r.component ?? r.name) === component) : measurements[component];
+  if (!Array.isArray(rows)) return false;
+  if (Object.keys(axes).length === 0) return rows.length > 0;
+  return rows.some((row) => Object.keys(axes).every((axis) => String(row[axis] ?? "default") === String(props[axis] ?? "default")));
+}
 
 // Components whose glyph must NOT be the rect-with-bound-text template.
 const NO_BOUND_TEXT = new Set(["Checkbox", "Switch", "Separator", "Progress", "RadioGroupItem", "Slider"]);
@@ -222,6 +249,12 @@ for (const item of lib.libraryItems ?? []) {
     }
   }
 
+  // ------- provenance
+  const source = container?.customData?.source;
+  if (component && !SOURCES.has(source)) {
+    errors.push(`${name}: container must declare customData.source ("measured" | "typography" | "composite") — provenance is what stops derived entries from passing as measured ones`);
+  }
+
   // ------- record variant x size combination
   if (component && manifest?.has(component)) {
     const { axes, defaults } = manifest.get(component);
@@ -230,6 +263,10 @@ for (const item of lib.libraryItems ?? []) {
       .sort()
       .map((axis) => `${axis}=${props[axis] ?? container?.customData?.variant ?? defaults[axis] ?? "default"}`);
     seenCombos.add(`${component}|${parts.join("|")}`);
+
+    if (source === "measured" && !measuredRowExists(component, axes, props)) {
+      errors.push(`${name}: declared source "measured" but no matching row exists in ${measurementsPath} — either measure this combination or stamp it honestly`);
+    }
   }
 }
 
@@ -252,7 +289,15 @@ function crossProduct(axes) {
 if (manifest) {
   let missingComponents = 0;
   let missingCombos = 0;
-  for (const [component, { axes }] of manifest) {
+  for (const [component, { axes, role, partOf }] of manifest) {
+    // Parts are drawn inside their root's composite glyph and never need
+    // an entry of their own. A root is never excused this way.
+    if (role === "part") {
+      if (partOf && !manifest.has(partOf)) {
+        warns.push(`${component} is tagged partOf "${partOf}" but no such component is in the manifest`);
+      }
+      continue;
+    }
     if (skipComponents[component]) continue;
     if (!seenComponents.has(component)) {
       errors.push(`missing component: ${component} has no library entry and no skips.json entry — coverage gaps force the designer agent to freehand-draw, which is forbidden`);
@@ -299,13 +344,16 @@ if (typography) {
 
 for (const w of warns) console.log(`WARN:  ${w}`);
 for (const e of errors) console.log(`ERROR: ${e}`);
-const manifestCovered = manifest ? [...manifest.keys()].filter((c) => seenComponents.has(c)).length : 0;
-const manifestSkipped = manifest ? [...manifest.keys()].filter((c) => skipComponents[c]).length : 0;
-console.log(
-  `\n${errors.length} error(s), ${warns.length} warning(s), ${lib.libraryItems?.length ?? 0} library item(s)` +
-    (manifest
-      ? `\nmanifest coverage: ${manifestCovered}/${manifest.size} components with entries, ${manifestSkipped} declared in skips.json`
-      : "") +
-    `\ncomponents in library: ${[...seenComponents].sort().join(", ")}`
-);
+let summary = `\n${errors.length} error(s), ${warns.length} warning(s), ${lib.libraryItems?.length ?? 0} library item(s)`;
+if (manifest) {
+  const roots = [...manifest.entries()].filter(([, m]) => m.role === "root").map(([c]) => c);
+  const parts = manifest.size - roots.length;
+  const covered = roots.filter((c) => seenComponents.has(c)).length;
+  const skipped = roots.filter((c) => skipComponents[c]).length;
+  summary +=
+    `\nroot coverage: ${covered}/${roots.length} roots with entries, ${skipped} declared in skips.json` +
+    `\n(${parts} part(s) excluded — drawn inside their root's composite)`;
+}
+summary += `\ncomponents in library: ${[...seenComponents].sort().join(", ")}`;
+console.log(summary);
 process.exit(errors.length ? 1 : 0);

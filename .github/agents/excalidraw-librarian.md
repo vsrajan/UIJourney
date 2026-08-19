@@ -37,6 +37,13 @@ convention. Read the coverage and typography sections carefully.
   (a table row wants `Button/positive/sm`, which neither axis alone
   produces). Expect the finished library to run to roughly 150 items; the
   slash naming (`Button/positive/sm`) keeps that browsable.
+- **Never skip a compound root.** The manifest tags each entry
+  `role: "root"` or `role: "part"`. Parts (`TableRow`, `CardHeader`,
+  `DataTableToolbar`, `DatePickerCalendar`) need no entry — they are drawn
+  inside their root's composite glyph. Roots always need one. A pilot run
+  skipped `DataTable` and `DatePicker` along with their 22 internal parts,
+  which left journeys with no enterprise table and no date field; the parts
+  were the right call, the roots were not.
 - **Anything you leave out goes in `lib/skips.json`** with a reason, a
   bucket (`overlay` | `complex` | `deferred` | `n/a`), and a review date.
   Silence is a validation failure. Deferring is fine; deferring quietly
@@ -65,6 +72,14 @@ convention. Read the coverage and typography sections carefully.
    contradicts `docs/uds-standards.md`, do not silently pick a side: record
    the discrepancy in the MR description and defer to the diff-standards
    output.
+6. **Every container declares its provenance** —
+   `customData.source: "measured"` (geometry and color read from a real
+   render, with a matching row in `data/measurements.json`),
+   `"typography"` (emitted from `lib/typography.json`), or `"composite"`
+   (assembled by hand from measured parts: Table, DataTable, DatePicker,
+   Card, AppHeader). Stamping `measured` on an entry you derived rather
+   than rendered is the one thing that makes the whole library
+   untrustworthy — the validator cross-checks it.
 
 ## Typography: emit from data, do not measure
 
@@ -108,6 +123,20 @@ render harness's defaults to leak in — which is exactly how run 2 produced
   value (~60%). Label, if any, is a free text above — never bound.
 - **Table** (composite): header row + two data rows with zebra striping,
   column dividers, and a checkbox cell. Designers duplicate rows.
+- **DataTable** (composite, required whenever the kit has one): the full
+  enterprise table — a toolbar row (search input + filter control), a
+  header row with a select-all checkbox and sort affordances, three data
+  rows each with a row checkbox, and a pagination footer (rows-per-page
+  select + page controls). This is what a work-items or approvals screen
+  actually is; without it the designer composes a bare `Table` and codegen
+  emits the wrong primitive while every check still passes. Stamp the
+  container `customData.component: "DataTable"` so the coder emits
+  `<DataTable>`, and carry the feature set in `props`
+  (`{ selectable: true, pagination: true, columns: [...] }`).
+- **DatePicker** (composite, required whenever the kit has one): two
+  entries — the closed state (input + calendar icon, which is what appears
+  in a form) and the open state (input + popover calendar panel, captured
+  with the force-open harness below).
 - **Card** (composite): the standard's rounded-xl white surface with
   mercury border.
 - **AppHeader** (composite): full-width white bar with the logo placeholder
@@ -156,6 +185,20 @@ with bucket `overlay`.
    the developer how browser binaries are provisioned — do not fabricate
    measurements without a real render. Measure geometry with a canonical
    label, not the variant name.
+
+   **The measure script enumerates the same cross product the builder
+   emits — one measured row per combination.** Emit
+   `data/measurements.json` as `{ "<Component>": [ { "<axis>": "<value>",
+   …, "width": n, "height": n, "backgroundColor": "#…", … } ] }`.
+
+   **Never reuse a stale `measurements.json` without checking its row
+   count against the combinations you are about to emit.** A pilot run
+   reused a 9-row file to emit 48 Button entries, silently deriving 39 of
+   them by combining one variant's colors with another size's geometry.
+   That derivation happens to be sound for text buttons — and wrong for
+   `size: icon`, which is square and takes no width from its label, and
+   for sizes that change font size (`sm` is `text-[0.8rem]`). If the file
+   does not cover the cross product, regenerate it.
 3. Build the library: measured glyphs for kit components (full axis cross
    product), data-driven glyphs for typography, hand-assembled composites
    for Table/Card/AppHeader. Update `lib/skips.json` for anything omitted.
