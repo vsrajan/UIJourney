@@ -3,90 +3,176 @@
 // .github/agents/excalidraw-librarian.md. No dependencies.
 //
 //   node scripts/validate-lib.mjs lib/uds.excalidrawlib
+//     [--manifest data/component-manifest.json]
+//     [--typography lib/typography.json]
+//     [--skips lib/skips.json]
+//
+// Coverage is derived from the component manifest — NOT from a list baked
+// into this file. Anything deliberately left out must be declared in
+// skips.json, so silence is a failure and deferral is a written decision.
 //
 // Exits 1 on any ERROR. WARNs don't fail the run but must be explained in
 // the MR description.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
-const path = process.argv[2];
-if (!path) {
-  console.error("usage: node scripts/validate-lib.mjs <file.excalidrawlib>");
+const argv = process.argv.slice(2);
+const libPath = argv.find((a) => !a.startsWith("--"));
+function flag(name, fallback) {
+  const i = argv.indexOf(`--${name}`);
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
+}
+const manifestPath = flag("manifest", "data/component-manifest.json");
+const typographyPath = flag("typography", "lib/typography.json");
+const skipsPath = flag("skips", "lib/skips.json");
+
+if (!libPath) {
+  console.error("usage: node scripts/validate-lib.mjs <file.excalidrawlib> [--manifest p] [--typography p] [--skips p]");
   process.exit(2);
 }
 
 const errors = [];
 const warns = [];
 
-let lib;
-try {
-  // JSON.parse catches the classic unquoted-URL bug ("source": https://...)
-  lib = JSON.parse(readFileSync(path, "utf8"));
-} catch (e) {
-  console.error(`ERROR: ${path} is not valid JSON: ${e.message}`);
-  process.exit(1);
+function readJson(p, label) {
+  try {
+    // JSON.parse also catches the classic unquoted-URL bug ("source": https://...)
+    return JSON.parse(readFileSync(p, "utf8"));
+  } catch (e) {
+    console.error(`ERROR: ${label} (${p}) is not valid JSON: ${e.message}`);
+    process.exit(1);
+  }
 }
 
+const lib = readJson(libPath, "library");
 if (lib.type !== "excalidrawlib" || !Array.isArray(lib.libraryItems)) {
   errors.push(`not an excalidrawlib (type=${lib.type})`);
 }
 
-// Components that must exist so journey mockups never need freehand drawing.
-const REQUIRED = [
-  "Button", "Input", "Textarea", "Select", "Checkbox", "RadioGroupItem",
-  "Switch", "Label", "Separator", "Progress", "Badge", "Alert",
-  "Table", "Card", "AppHeader", "Heading", "Text", "Link",
-];
+// ---------------------------------------------------------------- skips
+
+const skips = existsSync(skipsPath) ? readJson(skipsPath, "skips") : {};
+const skipComponents = skips.components ?? {};
+const skipCombinations = skips.combinations ?? {};
+const skipTypography = skips.typography ?? {};
+for (const [k, v] of Object.entries({ ...skipComponents, ...skipCombinations, ...skipTypography })) {
+  if (!v || !v.reason) errors.push(`skips.json entry "${k}" has no reason — every deferral must be justified in writing`);
+}
+
+// ------------------------------------------------------------- manifest
+
+// Canonical manifest shape (see .github/agents/design-data-extractor.md):
+//   { "components": { "Button": { "variants": { "variant": [...], "size": [...] },
+//                                 "defaultVariants": { "variant": "default" } } } }
+// A bare top-level object of components, or an array of entries carrying a
+// name/component key, is also accepted.
+function loadManifest(p) {
+  if (!existsSync(p)) return null;
+  const raw = readJson(p, "component manifest");
+  let root = raw.components ?? raw;
+  if (Array.isArray(root)) {
+    root = Object.fromEntries(root.map((e) => [e.name ?? e.component ?? e.export, e]));
+  }
+  const out = new Map();
+  for (const [name, def] of Object.entries(root)) {
+    if (!def || typeof def !== "object" || !name) continue;
+    const rawAxes = def.variants ?? def.variantAxes ?? def.cva?.variants ?? null;
+    const axes = {};
+    if (rawAxes && typeof rawAxes === "object" && !Array.isArray(rawAxes)) {
+      for (const [axis, vals] of Object.entries(rawAxes)) {
+        if (Array.isArray(vals)) axes[axis] = vals.map(String);
+        else if (vals && typeof vals === "object") axes[axis] = Object.keys(vals);
+      }
+    }
+    out.set(name, { axes, defaults: def.defaultVariants ?? def.defaults ?? {} });
+  }
+  return out;
+}
+
+const manifest = loadManifest(manifestPath);
+if (!manifest) {
+  warns.push(`no component manifest at ${manifestPath} — coverage cannot be checked; run design-data-extractor first`);
+} else if (manifest.size === 0) {
+  errors.push(`component manifest at ${manifestPath} parsed but contained no components — check its shape against design-data-extractor.md`);
+}
+
+// Composites the contract requires even though no kit component exists for them.
+const REQUIRED_COMPOSITES = ["AppHeader", "Heading", "Text", "Link"];
 
 // Components whose glyph must NOT be the rect-with-bound-text template.
 const NO_BOUND_TEXT = new Set(["Checkbox", "Switch", "Separator", "Progress", "RadioGroupItem", "Slider"]);
+// Components rendered as bare text (no container rectangle).
+const BARE_TEXT = new Set(["Label", "Heading", "Text", "Link"]);
+
+// ----------------------------------------------------------- typography
+
+const typography = existsSync(typographyPath) ? readJson(typographyPath, "typography") : null;
+if (!typography) {
+  warns.push(`no typography spec at ${typographyPath} — text entries cannot be checked against the UDS type scale`);
+}
+const scale = typography?.scale ?? {};
+const roles = typography?.roles ?? {};
+
+function resolveToken(name) {
+  if (scale[name]) return { token: name, ...scale[name] };
+  const role = roles[name];
+  if (role) {
+    const base = role.basedOn ? scale[role.basedOn] : null;
+    if (base) return { token: name, ...base, ...role };
+    return { token: name, ...role };
+  }
+  return null;
+}
+
+// ------------------------------------------------------- per-item checks
 
 const seenComponents = new Set();
+const seenCombos = new Set();
+const seenTypography = new Set();
 
 for (const item of lib.libraryItems ?? []) {
-  const name = item.name ?? item.id;
+  const name = item.name ?? item.id ?? "(unnamed)";
   const els = item.elements ?? [];
   const byId = Object.fromEntries(els.map((e) => [e.id, e]));
-  const container = els.find((e) => e.type !== "text" && e.customData?.component);
-  const component =
-    container?.customData?.component ??
-    els.find((e) => e.customData?.component)?.customData?.component;
+
+  // The element that represents the component: a non-text container, or for
+  // bare-text components the text element itself.
+  const container =
+    els.find((e) => e.type !== "text" && e.customData?.component) ??
+    els.find((e) => e.type === "text" && !e.containerId && e.customData?.component);
+  const component = container?.customData?.component;
   if (component) seenComponents.add(component);
 
   for (const el of els) {
-    if (el.type === "text") {
-      if (el.fontFamily !== 2) {
-        errors.push(`${name}: text "${el.text}" has fontFamily ${el.fontFamily}; UI wireframes require 2 (Helvetica), never 3 (code font)`);
+    if (el.type !== "text") continue;
+
+    if (el.fontFamily !== 2) {
+      errors.push(`${name}: text "${el.text}" has fontFamily ${el.fontFamily}; UI wireframes require 2 (Helvetica), never 3 (code font)`);
+    }
+    // Metadata lives on the container only (bare text is its own container).
+    if (el.containerId && el.customData?.component) {
+      errors.push(`${name}: bound text re-declares customData.component — metadata belongs on the container only (bound label may carry {role:"label"} at most)`);
+    }
+    if (el.containerId && byId[el.containerId]) {
+      const c = byId[el.containerId];
+      if (el.width > c.width || el.height > c.height) {
+        errors.push(`${name}: bound text ${el.width}x${el.height} exceeds container ${c.width}x${c.height} — Excalidraw will wrap or grow it unpredictably`);
       }
-      // Metadata lives on the container only.
-      if (el.containerId && el.customData?.component) {
-        errors.push(`${name}: bound text re-declares customData.component — metadata belongs on the container only (bound label may carry {role:"label"} at most)`);
-      }
-      // Bound text must fit its container.
-      if (el.containerId && byId[el.containerId]) {
-        const c = byId[el.containerId];
-        if (el.width > c.width || el.height > c.height) {
-          errors.push(`${name}: bound text ${el.width}x${el.height} exceeds container ${c.width}x${c.height} — Excalidraw will wrap or grow it unpredictably`);
-        }
-      }
-      if (el.containerId && component && NO_BOUND_TEXT.has(component)) {
-        errors.push(`${name}: ${component} must not have text bound into its shape (checkbox/switch/radio labels sit BESIDE the control; separators/progress carry no label)`);
-      }
+    }
+    if (el.containerId && component && NO_BOUND_TEXT.has(component)) {
+      errors.push(`${name}: ${component} must not have text bound into its shape (checkbox/switch/radio labels sit BESIDE the control; separators/progress carry no label)`);
     }
   }
 
-  // Anatomy spot-checks.
-  if (component === "Label" && els.some((e) => e.type === "rectangle")) {
-    errors.push(`${name}: Label must be a bare text element — no rectangle, no border`);
+  // ------- anatomy spot-checks
+  if (BARE_TEXT.has(component) && els.some((e) => e.type === "rectangle")) {
+    errors.push(`${name}: ${component} must be a bare text element — no rectangle, no border`);
   }
   if (component === "Separator" && els.some((e) => e.type === "rectangle" && e.height > 4)) {
     errors.push(`${name}: Separator must be a thin line (<=4px tall), not a filled block`);
   }
-  if (component === "Progress") {
-    const rects = els.filter((e) => e.type === "rectangle");
-    if (rects.length < 2) {
-      errors.push(`${name}: Progress needs a track rect AND a fill rect (showing a partial value)`);
-    }
+  if (component === "Progress" && els.filter((e) => e.type === "rectangle").length < 2) {
+    errors.push(`${name}: Progress needs a track rect AND a fill rect (showing a partial value)`);
   }
   if (component === "Checkbox") {
     const box = els.find((e) => e.type === "rectangle");
@@ -97,18 +183,129 @@ for (const item of lib.libraryItems ?? []) {
   if (component === "Switch" && !els.some((e) => e.type === "ellipse")) {
     warns.push(`${name}: Switch should show a pill track + circle thumb (no ellipse found)`);
   }
-  if (container && !container.customData?.resize) {
+  if (container && container.type !== "text" && !container.customData?.resize) {
     warns.push(`${name}: container has no customData.resize hint ("horizontal" | "both" | "none") — designers won't know what they may stretch`);
+  }
+
+  // ------- overlay glyphs must show a panel, not just a scrim
+  if (container?.customData?.overlay) {
+    const solid = els.filter((e) => e.type === "rectangle" && e.backgroundColor && e.backgroundColor !== "transparent" && (e.opacity ?? 100) > 60);
+    if (solid.length === 0) {
+      errors.push(`${name}: overlay entry has no opaque content panel — a dimmed scrim alone is not a usable glyph`);
+    }
+  }
+
+  // ------- typography conformance
+  if (BARE_TEXT.has(component) && component !== "Label") {
+    const tokenName = container?.customData?.typography;
+    if (!tokenName) {
+      errors.push(`${name}: ${component} entry must declare customData.typography naming its type-scale token (e.g. "header-4", "body-2")`);
+    } else if (typography) {
+      seenTypography.add(tokenName);
+      const spec = resolveToken(tokenName);
+      if (!spec) {
+        errors.push(`${name}: customData.typography "${tokenName}" is not defined in ${typographyPath}`);
+      } else {
+        const textEl = container.type === "text" ? container : els.find((e) => e.type === "text");
+        if (textEl) {
+          if (spec.fontSize != null && Math.abs(textEl.fontSize - spec.fontSize) > 0.5) {
+            errors.push(`${name}: ${tokenName} fontSize ${textEl.fontSize} does not match the UDS type scale (${spec.fontSize})`);
+          }
+          const weight = textEl.customData?.fontWeight;
+          if (spec.fontWeight != null && weight == null) {
+            errors.push(`${name}: text element must record customData.fontWeight (Excalidraw has no fontWeight field; ${tokenName} requires ${spec.fontWeight})`);
+          } else if (spec.fontWeight != null && Number(weight) !== Number(spec.fontWeight)) {
+            errors.push(`${name}: ${tokenName} fontWeight ${weight} does not match the UDS type scale (${spec.fontWeight})`);
+          }
+        }
+      }
+    }
+  }
+
+  // ------- record variant x size combination
+  if (component && manifest?.has(component)) {
+    const { axes, defaults } = manifest.get(component);
+    const props = container?.customData?.props ?? {};
+    const parts = Object.keys(axes)
+      .sort()
+      .map((axis) => `${axis}=${props[axis] ?? container?.customData?.variant ?? defaults[axis] ?? "default"}`);
+    seenCombos.add(`${component}|${parts.join("|")}`);
   }
 }
 
-for (const req of REQUIRED) {
-  if (!seenComponents.has(req)) {
-    errors.push(`missing required component entry: ${req} — coverage gaps force the designer agent to freehand-draw, which is forbidden`);
+// ------------------------------------------------------ coverage checks
+
+function comboKey(component, axes, combo) {
+  const parts = Object.keys(axes).sort().map((a) => `${a}=${combo[a]}`);
+  return `${component}|${parts.join("|")}`;
+}
+function crossProduct(axes) {
+  let combos = [{}];
+  for (const axis of Object.keys(axes).sort()) {
+    const next = [];
+    for (const c of combos) for (const v of axes[axis]) next.push({ ...c, [axis]: v });
+    combos = next;
+  }
+  return combos;
+}
+
+if (manifest) {
+  let missingComponents = 0;
+  let missingCombos = 0;
+  for (const [component, { axes }] of manifest) {
+    if (skipComponents[component]) continue;
+    if (!seenComponents.has(component)) {
+      errors.push(`missing component: ${component} has no library entry and no skips.json entry — coverage gaps force the designer agent to freehand-draw, which is forbidden`);
+      missingComponents++;
+      continue;
+    }
+    const combos = crossProduct(axes);
+    if (combos.length > 200) {
+      warns.push(`${component} declares ${combos.length} variant combinations — consider narrowing the axes in skips.json`);
+      continue;
+    }
+    for (const combo of combos) {
+      const key = comboKey(component, axes, combo);
+      const readable = `${component}/${Object.keys(axes).sort().map((a) => combo[a]).join("/")}`;
+      if (skipCombinations[readable] || skipCombinations[key]) continue;
+      if (!seenCombos.has(key)) {
+        errors.push(`missing combination: ${readable} — every variant x size the manifest declares needs an entry or a skips.json entry`);
+        missingCombos++;
+      }
+    }
+  }
+  if (missingComponents || missingCombos) {
+    errors.push(`coverage summary: ${missingComponents} component(s) and ${missingCombos} combination(s) undeclared`);
   }
 }
+
+for (const composite of REQUIRED_COMPOSITES) {
+  if (skipComponents[composite]) continue;
+  if (!seenComponents.has(composite)) {
+    errors.push(`missing required composite: ${composite} — journeys need it and no kit component provides it`);
+  }
+}
+
+if (typography) {
+  for (const token of Object.keys(scale)) {
+    if (skipTypography[token]) continue;
+    if (!seenTypography.has(token)) {
+      errors.push(`type scale token "${token}" has no library entry and no skips.json entry`);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- report
 
 for (const w of warns) console.log(`WARN:  ${w}`);
 for (const e of errors) console.log(`ERROR: ${e}`);
-console.log(`\n${errors.length} error(s), ${warns.length} warning(s), ${lib.libraryItems?.length ?? 0} library item(s), components: ${[...seenComponents].sort().join(", ")}`);
+const manifestCovered = manifest ? [...manifest.keys()].filter((c) => seenComponents.has(c)).length : 0;
+const manifestSkipped = manifest ? [...manifest.keys()].filter((c) => skipComponents[c]).length : 0;
+console.log(
+  `\n${errors.length} error(s), ${warns.length} warning(s), ${lib.libraryItems?.length ?? 0} library item(s)` +
+    (manifest
+      ? `\nmanifest coverage: ${manifestCovered}/${manifest.size} components with entries, ${manifestSkipped} declared in skips.json`
+      : "") +
+    `\ncomponents in library: ${[...seenComponents].sort().join(", ")}`
+);
 process.exit(errors.length ? 1 : 0);

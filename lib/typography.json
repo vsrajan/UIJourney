@@ -1,0 +1,34 @@
+{
+  "$comment": [
+    "UDS type scale — the authority for every text element in the shape library.",
+    "Transcribed from docs/uds-standards.md because the scale is not (yet) available",
+    "as CSS custom properties. If design-data-extractor finds real typography",
+    "variables in the kit's CSS, tokens.json becomes authoritative and this file",
+    "must be reconciled with it — the extractor reports any drift.",
+    "fontSize and lineHeight are px. color values are semantic aliases, resolved",
+    "through tokens.json at build time."
+  ],
+  "source": "docs/uds-standards.md#type-scale",
+  "status": "transcribed-from-doc",
+  "scale": {
+    "header-1": { "fontSize": 48, "fontWeight": 300, "lineHeight": 52, "color": "--foreground", "use": "Display headline" },
+    "header-2": { "fontSize": 38, "fontWeight": 300, "lineHeight": 44, "color": "--foreground", "use": "Section headline" },
+    "header-3": { "fontSize": 32, "fontWeight": 300, "lineHeight": 40, "color": "--foreground", "use": "Subsection headline" },
+    "header-4": { "fontSize": 24, "fontWeight": 300, "lineHeight": 28, "color": "--foreground", "use": "Minor display" },
+    "header-5": { "fontSize": 18, "fontWeight": 400, "lineHeight": 24, "color": "--foreground", "use": "Title" },
+    "header-6": { "fontSize": 16, "fontWeight": 400, "lineHeight": 20, "color": "--foreground", "use": "Title small" },
+    "body-1": { "fontSize": 16, "fontWeight": 400, "lineHeight": 24, "color": "--foreground", "use": "Body default" },
+    "body-2": { "fontSize": 14, "fontWeight": 400, "lineHeight": 20, "color": "--foreground", "use": "Body compact" },
+    "body-3": { "fontSize": 12, "fontWeight": 400, "lineHeight": 16, "color": "--muted-foreground", "use": "Caption" },
+    "body-4": { "fontSize": 10, "fontWeight": 400, "lineHeight": 12, "color": "--muted-foreground", "use": "Micro text" }
+  },
+  "roles": {
+    "link": {
+      "basedOn": "body-2",
+      "fontWeight": 500,
+      "color": "--primary",
+      "status": "synthesized",
+      "note": "No Link component exists in the kit. Red follows the standard's single-accent rule, but this convention should be ratified by the design-system owners rather than becoming fact by default."
+    }
+  }
+}

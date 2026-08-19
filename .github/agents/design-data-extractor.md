@@ -18,14 +18,44 @@ output files must be traceable to a line of kit source code.
    every semantic alias (`--primary`, `--background`, `--ring`, ...) resolved
    through the alias chain to a concrete color, for light and `.dark`.
 2. `scripts/extract-manifest.mjs` — walks `src/components/ui/*.tsx` with the
-   TypeScript compiler API or `ts-morph`; emits `data/component-manifest.json`:
-   for each exported component, its file path, export name, every `cva()`
-   variant axis with its literal allowed values and default, and the
-   non-variant props worth modeling (size/disabled/asChild etc.).
+   TypeScript compiler API or `ts-morph`; emits `data/component-manifest.json`
+   in this canonical shape (downstream agents and `validate-lib.mjs` read it):
+
+   ```json
+   {
+     "components": {
+       "Button": {
+         "file": "src/components/ui/Button.tsx",
+         "exports": ["Button", "buttonVariants"],
+         "variants": {
+           "variant": ["default", "primary", "secondary", "positive", "negative", "ghost"],
+           "size": ["default", "xs", "sm", "lg", "icon", "icon-xs", "icon-sm", "icon-lg"]
+         },
+         "defaultVariants": { "variant": "default", "size": "default" }
+       }
+     }
+   }
+   ```
+
+   **Every component file gets an entry**, including the ~32 without a
+   `cva()` — those simply have `"variants": {}`. A component missing from
+   the manifest is invisible to every later phase, and the library agent
+   treats the manifest as its work list.
 3. `scripts/diff-standards.mjs` — compares `data/tokens.json` against the
    value tables in the standards doc appendix; prints every mismatch and
    every token referenced by an alias but never defined (a known real case:
    `--ring` -> `--MyFirm-lagoon50` with no lagoon50 hex anywhere).
+   **Normalize names before comparing** — the CSS writes `--MyFirm-neutral10`
+   while the doc writes `neutral10:` or `{colors.metric-red}`. A pilot run
+   reported 139 "undocumented primitives" that were almost all this format
+   mismatch; a report where 139 of 143 issues are noise trains people to
+   ignore it.
+   Also diff **typography**: if the CSS defines real type-scale variables,
+   capture them into `tokens.json` and compare against `lib/typography.json`
+   (which is transcribed from the doc), reporting any drift. If the CSS has
+   no typography variables, say so explicitly in the report — that is the
+   signal that `lib/typography.json` remains the only authority and the
+   design-system owners should be asked to promote the scale into CSS.
 4. `data/extraction-report.md` — coverage: every component file found, which
    were fully parsed, which were skipped and why, plus the full diff output.
 

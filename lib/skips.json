@@ -1,0 +1,62 @@
+{
+  "$comment": [
+    "Declared coverage gaps. validate-lib.mjs fails on any manifest component,",
+    "variant combination, or type-scale token that has neither a library entry",
+    "nor an entry here — so silence is a failure and every deferral is a written",
+    "decision with an owner and a date.",
+    "",
+    "bucket: 'overlay'   — needs force-open harness work (see excalidraw-librarian.md)",
+    "        'complex'   — data-driven; a labelled placeholder is the honest glyph",
+    "        'deferred'  — could be built today, not needed by any journey yet",
+    "        'n/a'       — genuinely not a visual glyph",
+    "",
+    "Starter content below reflects the Phase 2 review. Delete or extend as the",
+    "library grows; anything removed from here must gain a real library entry."
+  ],
+  "components": {
+    "Command": {
+      "reason": "Command palette — force-open harness supported, but no journey needs a palette yet.",
+      "bucket": "overlay",
+      "reviewed": "2026-08-19"
+    },
+    "Tooltip": {
+      "reason": "Transient hover affordance; too small to be a useful wireframe glyph.",
+      "bucket": "overlay",
+      "reviewed": "2026-08-19"
+    },
+    "Sonner": {
+      "reason": "Toaster is ephemeral and positioned by the runtime, not placed by a designer.",
+      "bucket": "overlay",
+      "reviewed": "2026-08-19"
+    },
+    "Calendar": {
+      "reason": "Date grid is data-driven; use a Select or Input glyph for date entry until a journey needs a full picker.",
+      "bucket": "complex",
+      "reviewed": "2026-08-19"
+    },
+    "Carousel": {
+      "reason": "Motion component; a static glyph misrepresents it.",
+      "bucket": "complex",
+      "reviewed": "2026-08-19"
+    },
+    "Chart": {
+      "reason": "Recharts wrapper — glyph would be a placeholder box. Revisit when a dashboard journey appears.",
+      "bucket": "complex",
+      "reviewed": "2026-08-19"
+    },
+    "AspectRatio": {
+      "reason": "Layout utility with no visual identity of its own.",
+      "bucket": "n/a",
+      "reviewed": "2026-08-19"
+    },
+    "ScrollArea": {
+      "reason": "Scroll container; the scrollbar is the only visual and it is platform-styled.",
+      "bucket": "n/a",
+      "reviewed": "2026-08-19"
+    }
+  },
+  "combinations": {},
+  "typography": {
+    "$note": "Bold body variants and the Number/Amount styles from the standard are not yet in scale{} — add them here (or to typography.json) when a journey needs them."
+  }
+}

@@ -133,6 +133,10 @@ the GitLab UI.
    - `scripts/validate-lib.mjs` and `scripts/validate-scene.mjs` (the
      mechanical quality gates the library and every mockup must pass —
      plain Node, no dependencies)
+   - `lib/typography.json` (the UDS type scale — **verify its values against
+     your standards doc before the first library build**; it is transcribed
+     from prose, not extracted from CSS) and `lib/skips.json` (the declared
+     coverage-gap log; edit as your library grows)
    - `WORKFLOW.md` and this `README.md`
 
    Yes, the directory is named `.github/` even though the repo lives on

@@ -62,7 +62,10 @@ in a web UI. Consequences that apply to every agent and every task:
    (`design-data-extractor`) must run first — never substitute values from
    memory or from prose docs.
 2. `lib/uds.excalidrawlib` — the approved shape library. Mockups are composed
-   exclusively from its entries.
+   exclusively from its entries. `lib/typography.json` is the authority for
+   the type scale (sizes, weights, line heights) unless `data/tokens.json`
+   carries real typography variables extracted from CSS, in which case those
+   win. `lib/skips.json` records every declared coverage gap.
 3. `docs/uds-standards.md` — the narrative standard (brand personality,
    logo rules, do/do-not). Use it for intent and hard rules, never as a
    source of hex values or component APIs.
