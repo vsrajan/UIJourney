@@ -193,12 +193,16 @@ with bucket `overlay`.
 
    **Never reuse a stale `measurements.json` without checking its row
    count against the combinations you are about to emit.** A pilot run
-   reused a 9-row file to emit 48 Button entries, silently deriving 39 of
-   them by combining one variant's colors with another size's geometry.
-   That derivation happens to be sound for text buttons — and wrong for
-   `size: icon`, which is square and takes no width from its label, and
-   for sizes that change font size (`sm` is `text-[0.8rem]`). If the file
-   does not cover the cross product, regenerate it.
+   reused a 12-row, single-axis file (`Button-default`, `Button-xs`, …) to
+   emit 48 Button entries, deriving 36 of them by combining one variant's
+   colors with another size's geometry.
+
+   Deriving like that is sound only when the axes are genuinely
+   independent — and the manifest tells you when they are not: **any
+   combination named in a component's `compoundVariants` must be measured
+   directly**, because its styling is by definition not the sum of its
+   axes. If you do derive an entry, stamp it `source: "composite"`, never
+   `"measured"`.
 3. Build the library: measured glyphs for kit components (full axis cross
    product), data-driven glyphs for typography, hand-assembled composites
    for Table/Card/AppHeader. Update `lib/skips.json` for anything omitted.

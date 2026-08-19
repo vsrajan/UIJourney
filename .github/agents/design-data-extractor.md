@@ -49,6 +49,13 @@ output files must be traceable to a line of kit source code.
    the manifest is invisible to every later phase, and the library agent
    treats the manifest as its work list.
 
+   **Capture `compoundVariants` too**, as a `compoundVariants` array of the
+   raw condition objects. These are the combinations whose styling is not
+   the sum of their axes, so they are the ones a builder can never derive
+   from single-axis measurements and must always render and measure
+   directly. A component with none is safely orthogonal; a component with
+   some has named exceptions that downstream agents must respect.
+
    **Tag every entry `role: "root"` or `role: "part"`.** A *root* is a
    component an application author imports and places on its own (Button,
    Input, DataTable, DatePicker, Dialog). A *part* is a piece of a compound
