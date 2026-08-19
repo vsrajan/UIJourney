@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// Fetches the sanctioned brand logo once and writes it to lib/logo.json as a
-// base64 data URL, so mockups can actually show it.
+// Fetches (or reads) the sanctioned brand logo once and writes it to
+// lib/logo.json as a base64 data URL, so mockups can actually show it.
 //
-//   node scripts/embed-logo.mjs <logo-url> [--out lib/logo.json]
+//   node scripts/embed-logo.mjs <logo-url>
+//   node scripts/embed-logo.mjs ./ubs-logo.png          # already downloaded
+//   node scripts/embed-logo.mjs <url> --out lib/logo.json
 //
-// Run this from inside the firm network, where the asset host is reachable.
+// Run from inside the firm network, where the asset host is reachable. If it
+// is not, download the PNG by any means and pass its local path instead.
 // Commit the result: it is small, it changes only when the brand mark does,
 // and every generated scene needs it.
 //
@@ -15,61 +18,122 @@
 // codegen emits the correct <img> tag; the embedded copy exists purely so
 // reviewers can see the brand mark in the mockup.
 
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from "node:fs";
+import { dirname, resolve, isAbsolute, extname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const url = process.argv[2];
-const outIdx = process.argv.indexOf("--out");
-const out = outIdx >= 0 && process.argv[outIdx + 1] ? process.argv[outIdx + 1] : "lib/logo.json";
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-if (!url) {
-  console.error("usage: node scripts/embed-logo.mjs <logo-url> [--out lib/logo.json]");
-  console.error("       the URL is the one marked CRITICAL in docs/uds-standards.md");
-  process.exit(2);
+function die(msg, hint) {
+  console.error(`ERROR: ${msg}`);
+  if (hint) console.error(hint);
+  process.exit(1);
 }
 
-const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", svg: "image/svg+xml", webp: "image/webp" };
+async function main() {
+  const args = process.argv.slice(2);
+  const source = args.find((a) => !a.startsWith("--"));
+  const outIdx = args.indexOf("--out");
+  const outArg = outIdx >= 0 && args[outIdx + 1] ? args[outIdx + 1] : "lib/logo.json";
+  // Resolve relative to the repo, not the shell's cwd, so running this from
+  // any directory puts the file where the agents look for it.
+  const outPath = isAbsolute(outArg) ? outArg : resolve(REPO_ROOT, outArg);
 
-const res = await fetch(url).catch((e) => {
-  console.error(`ERROR: could not fetch ${url}: ${e.message}`);
-  console.error("Run this from inside the firm network, or download the file and pass a file:// URL.");
+  if (!source) {
+    console.error("usage: node scripts/embed-logo.mjs <logo-url|local-file> [--out lib/logo.json]");
+    console.error("       the URL is the one marked CRITICAL in docs/uds-standards.md");
+    process.exit(2);
+  }
+
+  const isUrl = /^https?:\/\//i.test(source);
+  console.log(`source     : ${source} (${isUrl ? "remote" : "local file"})`);
+  console.log(`output     : ${outPath}`);
+
+  let buf;
+  let contentType = null;
+
+  if (isUrl) {
+    if (typeof fetch !== "function") {
+      die(
+        `this Node (${process.version}) has no global fetch — Node 18+ is required for URL mode`,
+        "Either upgrade Node, or download the logo and pass the local path:\n" +
+          "  node scripts/embed-logo.mjs ./ubs-logo.png"
+      );
+    }
+    let res;
+    try {
+      res = await fetch(source);
+    } catch (e) {
+      die(
+        `could not fetch ${source}: ${e.message}`,
+        "Run this from inside the firm network, or download the file and pass its local path."
+      );
+    }
+    if (!res.ok) die(`${source} returned ${res.status} ${res.statusText}`);
+    contentType = res.headers.get("content-type")?.split(";")[0] || null;
+    buf = Buffer.from(await res.arrayBuffer());
+  } else {
+    const p = isAbsolute(source) ? source : resolve(process.cwd(), source);
+    if (!existsSync(p)) die(`no such file: ${p}`);
+    buf = readFileSync(p);
+  }
+
+  if (!buf?.length) die("fetched/read 0 bytes");
+  console.log(`downloaded : ${buf.length} bytes`);
+
+  const MIME = { png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", svg: "image/svg+xml", webp: "image/webp", gif: "image/gif" };
+  const ext = extname(source.split("?")[0]).replace(".", "").toLowerCase();
+  const mimeType = contentType || MIME[ext] || "image/png";
+
+  // Reject HTML masquerading as an image — a login redirect or an error page
+  // fetched from an internal host would otherwise be embedded as "the logo".
+  if (mimeType.startsWith("text/") || buf.slice(0, 64).toString("ascii").trim().toLowerCase().startsWith("<!doctype html")) {
+    die(
+      `${source} returned ${mimeType || "HTML"}, not an image`,
+      "The host probably redirected to a login page. Download the asset in a browser and pass the local path."
+    );
+  }
+
+  // PNG dimensions live in the IHDR chunk at a fixed offset.
+  let naturalWidth = null;
+  let naturalHeight = null;
+  if (mimeType === "image/png" && buf.length > 24 && buf.toString("ascii", 12, 16) === "IHDR") {
+    naturalWidth = buf.readUInt32BE(16);
+    naturalHeight = buf.readUInt32BE(20);
+  }
+
+  const payload = {
+    $comment: [
+      "Brand logo, embedded so Excalidraw can render it. Excalidraw reads images",
+      "from a scene's files map, never from a remote URL — a URL-only logo shows",
+      "as an empty box. Generated by scripts/embed-logo.mjs; do not hand-edit.",
+      "`src` remains the authority for generated code.",
+    ],
+    id: "logo-uds",
+    src: isUrl ? source : null,
+    mimeType,
+    naturalWidth,
+    naturalHeight,
+    dataURL: `data:${mimeType};base64,${buf.toString("base64")}`,
+  };
+
+  if (!isUrl) {
+    console.log("NOTE: read from a local file, so `src` is null — set it to the sanctioned URL");
+    console.log("      from docs/uds-standards.md before committing; that value is what codegen emits.");
+  }
+
+  mkdirSync(dirname(outPath), { recursive: true });
+  writeFileSync(outPath, JSON.stringify(payload, null, 2));
+
+  const kb = (payload.dataURL.length / 1024).toFixed(1);
+  console.log(`\nwrote ${outPath}`);
+  console.log(`  ${mimeType}, ${naturalWidth ?? "?"}x${naturalHeight ?? "?"}, ${kb} KB as base64`);
+  if (payload.dataURL.length > 512 * 1024) {
+    console.log("  WARN: over 512 KB; every scene embeds a copy, so consider a smaller asset");
+  }
+}
+
+main().catch((e) => {
+  console.error(`ERROR: unexpected failure: ${e?.stack || e}`);
   process.exit(1);
 });
-if (!res.ok) {
-  console.error(`ERROR: ${url} returned ${res.status} ${res.statusText}`);
-  process.exit(1);
-}
-
-const buf = Buffer.from(await res.arrayBuffer());
-const ext = (url.split("?")[0].split(".").pop() ?? "png").toLowerCase();
-const mimeType = res.headers.get("content-type")?.split(";")[0] || MIME[ext] || "image/png";
-
-// PNG dimensions live in the IHDR chunk at a fixed offset; other formats are
-// left to the caller, since only the aspect ratio matters downstream.
-let width = null;
-let height = null;
-if (mimeType === "image/png" && buf.length > 24 && buf.toString("ascii", 12, 16) === "IHDR") {
-  width = buf.readUInt32BE(16);
-  height = buf.readUInt32BE(20);
-}
-
-const payload = {
-  $comment: [
-    "Brand logo, embedded so Excalidraw can render it. Excalidraw reads images",
-    "from a scene's files map, never from a remote URL — a URL-only logo shows",
-    "as an empty box. Generated by scripts/embed-logo.mjs; do not hand-edit.",
-    "`src` remains the authority for generated code.",
-  ],
-  id: "logo-uds",
-  src: url,
-  mimeType,
-  naturalWidth: width,
-  naturalHeight: height,
-  dataURL: `data:${mimeType};base64,${buf.toString("base64")}`,
-};
-
-writeFileSync(out, JSON.stringify(payload, null, 2));
-const kb = (payload.dataURL.length / 1024).toFixed(1);
-console.log(`wrote ${out} — ${mimeType}, ${width ?? "?"}x${height ?? "?"}, ${kb} KB as base64`);
-if (payload.dataURL.length > 512 * 1024) {
-  console.log("WARN: over 512 KB; every scene embeds a copy, so consider a smaller asset");
-}
