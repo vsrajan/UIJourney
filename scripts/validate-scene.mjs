@@ -206,8 +206,21 @@ for (const el of els) {
     }
   }
 
-  if (el.frameId && !cd.annotation && !cd.component && !cd.transition && el.type !== "frame") {
+  // Bound text is described by its container, which carries the metadata, so
+  // it must NOT declare customData.component (checked above) and must not be
+  // required to either. Demanding both created a deadlock whose only escape
+  // was dropping frameId — which silently removes the label from its frame,
+  // so it stops moving with the screen.
+  const isBoundText = el.type === "text" && !!el.containerId;
+  if (el.frameId && !isBoundText && !cd.annotation && !cd.component && !cd.transition && el.type !== "frame") {
     errors.push(`${label} inside a frame has no customData at all — codegen cannot map it`);
+  }
+  // Bound text belongs to the same frame as its container.
+  if (isBoundText && byId[el.containerId]) {
+    const c = byId[el.containerId];
+    if (c.frameId && el.frameId !== c.frameId) {
+      errors.push(`bound text ${label} has frameId ${el.frameId ?? "null"} but its container is in frame ${c.frameId} — the label will not move with the screen`);
+    }
   }
 
   // Typography conformance: size, weight and colour.
