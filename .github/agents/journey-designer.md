@@ -55,12 +55,24 @@ A merge request containing
    at the canvas origin instead of on its button — a pilot login screen
    shipped with every placeholder and button label piled in the top-left
    corner. Position each bound label centred within its container.
-5b. **The logo is an element, never a flag.** `props: { logo: true }` on an
-   AppHeader draws nothing. Every screen with an app header contains a
-   separate element with `customData.component: "Logo"` carrying
-   `props.src` set to the sanctioned URL from `docs/uds-standards.md`,
-   placed on the left of the header. This is the standard's one CRITICAL
-   rule.
+5b. **The logo is an embedded image, never a flag or a placeholder box.**
+   `props: { logo: true }` draws nothing, and a grey rectangle is not a
+   brand mark. Excalidraw renders images only from the scene's `files`
+   map — it never fetches a remote `src` — so every screen with an app
+   header needs all three of:
+   - an element of `type: "image"` with `customData.component: "Logo"`,
+     positioned at the left of the header, at least 24px tall, at the
+     asset's natural aspect ratio;
+   - a `fileId` on that element matching a key in the scene's top-level
+     `files` map, whose entry carries the `dataURL` from `lib/logo.json`
+     (generated once by `scripts/embed-logo.mjs`);
+   - `customData.props.src` set to the sanctioned URL from
+     `docs/uds-standards.md` — that, not the embedded copy, is what
+     codegen emits as the `<img src>`.
+
+   Copy the `files` entry verbatim from `lib/logo.json`; do not re-encode
+   or resize the asset. This is the standard's one CRITICAL rule, and the
+   embedded copy exists purely so reviewers can see the mark in the mockup.
 5c. **Each frame contains a `PageBackground` rect** sized to the frame and
    filled with `--background`, so screens sit on the standard's ground
    rather than bare canvas.

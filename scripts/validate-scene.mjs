@@ -273,7 +273,20 @@ for (const f of frames) {
   if (logo) {
     const src = logo.customData?.props?.src;
     if (!src) {
-      errors.push(`frame "${f.name}": Logo element carries no props.src — it must reference the sanctioned image URL from docs/uds-standards.md`);
+      errors.push(`frame "${f.name}": Logo element carries no props.src — it must reference the sanctioned image URL from docs/uds-standards.md, which is what codegen emits`);
+    }
+    // Excalidraw renders images only from the scene's files map. A rectangle
+    // placeholder, or an image element whose fileId is not in files, shows as
+    // an empty grey box — the brand mark is simply absent from the review.
+    if (logo.type !== "image") {
+      errors.push(`frame "${f.name}": Logo is a ${logo.type}, not an Excalidraw image element — a placeholder rectangle renders as a grey box; embed the asset (see scripts/embed-logo.mjs)`);
+    } else if (!logo.fileId) {
+      errors.push(`frame "${f.name}": Logo image element has no fileId`);
+    } else if (!scene.files?.[logo.fileId]?.dataURL) {
+      errors.push(`frame "${f.name}": Logo fileId "${logo.fileId}" is not in the scene's files map — Excalidraw never fetches a remote src, so the logo will not render`);
+    }
+    if (logo.height != null && logo.height < 24) {
+      errors.push(`frame "${f.name}": Logo is ${logo.height}px tall — the standard sets a 24px minimum`);
     }
     if (header && logo.x > header.x + header.width / 2) {
       warns.push(`frame "${f.name}": Logo sits in the right half of the header — the standard places it on the left`);

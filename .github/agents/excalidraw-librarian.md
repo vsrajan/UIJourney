@@ -139,10 +139,21 @@ render harness's defaults to leak in — which is exactly how run 2 produced
   with the force-open harness below).
 - **Card** (composite): the standard's rounded-xl white surface with
   mercury border.
-- **AppHeader** (composite): full-width white bar with the logo placeholder
-  at the LEFT — a rect stamped `customData: { component: "Logo", props: {
-  src: <sanctioned URL>, alt, height: 31 } }`, drawn with a visible border
-  so it cannot vanish white-on-white — plus a title Text slot.
+- **AppHeader** (composite): full-width white bar with the real brand logo
+  at the LEFT plus a title Text slot. The logo is an element of
+  `type: "image"` stamped `customData: { component: "Logo", props: { src:
+  <sanctioned URL>, alt } }`, sized at the asset's natural aspect ratio and
+  at least 24px tall — never a placeholder rectangle, which renders as a
+  grey box and hides the standard's one CRITICAL element.
+
+  Excalidraw resolves images through a `files` map keyed by the element's
+  `fileId`, so run `node scripts/embed-logo.mjs <sanctioned-url>` once to
+  produce `lib/logo.json`, and give the image element a `fileId` matching
+  that file's `id`. Include the same entry in the library's own `files` map
+  and **verify by importing `lib/uds.excalidrawlib` into Excalidraw and
+  confirming the mark renders**; if the library format drops the file data,
+  say so in the MR — scenes still render correctly because the designer
+  agent copies the entry from `lib/logo.json` into each scene's `files`.
 - **Overlays** (Dialog, AlertDialog, Sheet, DropdownMenu, Popover,
   Select content, Combobox): the glyph is the **content panel** — rounded
   rect, title, body, footer button row — optionally over a dimmed scrim
