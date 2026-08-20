@@ -72,6 +72,22 @@ validation cycles; the same screen composed from a spec passes first time.
    `journey-coder` on this branch).
 5. On revisions, edit the spec and re-run — never patch the scene.
 
+## When the library is provisional
+
+If `compose-scene.mjs` reports `PROVISIONAL`, the library came from
+`excalidraw-librarian-lite`: heights and colours are exact, widths are
+estimates. That is a fine basis for a mockup and not a basis for code.
+
+Validate with `--allow-derived` (the scene will not pass without it),
+prefix the MR title with `[provisional]`, and open the description with one
+line saying the mockup is composed from a derived library, naming the
+components affected — the composer lists them. Say that `journey-coder`
+will refuse this scene, and that once the kit builds, re-running the real
+librarian and recomposing the same spec upgrades it with no redesign.
+
+Deliver it anyway. A provisional mockup that a developer can review is worth
+far more than a blocked run.
+
 ## The rules the validator enforces
 
 Stated here so you never need to read the validator. The composer already

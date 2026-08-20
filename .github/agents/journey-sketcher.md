@@ -55,6 +55,13 @@ without the ceremony, so the developer can iterate on layout and copy first.
    ```
 5. Show the developer the PNG path and a short summary: screens, components
    used, anything you had to approximate. Ask what to change.
+
+   If the composer reports `PROVISIONAL`, the library came from
+   `excalidraw-librarian-lite` — say so once, in a sentence: heights and
+   colours are exact, widths are estimates, and a component that looks
+   slightly too narrow or wide is worth correcting with an explicit `width`
+   in the spec rather than treating as the kit's real size. Then carry on;
+   it does not change how you work.
 6. On each revision, edit `spec.json` and re-run both commands. A revision
    is a few lines of spec, not a regenerated scene — that is the whole point
    of this agent.

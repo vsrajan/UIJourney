@@ -81,16 +81,22 @@ const BACKGROUND = resolveColor("--background", "#F4F3EE");
 
 // Index every component-bearing element, and keep the whole item so a
 // composite can be cloned as a unit.
-const entries = new Map(); // "Component/variant" -> { item, anchor }
+const entries = new Map(); // "Component/variant" -> { item, anchor, source }
 for (const item of lib.libraryItems ?? []) {
   for (const el of item.elements ?? []) {
     const c = el.customData?.component;
     if (!c) continue;
     if (el.type === "text" && el.containerId) continue;
     const key = `${c}/${el.customData.variant ?? "default"}`;
-    if (!entries.has(key)) entries.set(key, { item, anchor: el });
+    if (!entries.has(key)) entries.set(key, { item, anchor: el, source: el.customData.source });
   }
 }
+
+// Components placed from a library entry whose geometry was derived from
+// Tailwind classes rather than measured. Tracked so the scene can declare
+// itself provisional: heights are exact, widths are estimates, and codegen
+// must not read layout off a scene built from estimates.
+const derivedUsed = new Set();
 function lookup(component, variant = "default") {
   return entries.get(`${component}/${variant}`) ?? entries.get(`${component}/default`) ?? null;
 }
@@ -254,6 +260,7 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
 
       const entry = lookup(comp, node.variant);
       if (!entry) die(`component "${comp}/${node.variant ?? "default"}" is not in the library — report the gap, do not substitute`);
+      if (entry.source === "derived") derivedUsed.add(comp);
 
       const isHeader = comp === "AppHeader";
       const width = node.width ?? (isHeader ? fw : comp === "Card" ? Math.min(400, fw - 2 * CARD_PAD) : availWidth);
@@ -352,9 +359,25 @@ const scene = {
   type: "excalidraw", version: 2, source: "uijourney-compose",
   elements, appState: { gridSize: 8, viewBackgroundColor: "#FFFFFF" }, files,
 };
+if (derivedUsed.size) {
+  // Provenance travels with the artifact. validate-scene.mjs refuses a
+  // provisional scene without --allow-derived, and journey-coder refuses it
+  // outright, so a draft library can never quietly become the basis for
+  // generated code.
+  scene.customData = {
+    ...(scene.customData ?? {}),
+    provisional: true,
+    provisionalReason: "composed from library entries whose geometry was derived from Tailwind classes, not measured",
+    derivedComponents: [...derivedUsed].sort(),
+  };
+}
 
 mkdirSync(dirname(outPath), { recursive: true });
 writeFileSync(outPath, JSON.stringify(scene, null, 2));
 console.log(`wrote ${outPath}`);
 console.log(`  ${frameIds.length} screen(s), ${elements.length} element(s), ${Object.keys(files).length} embedded file(s)`);
 if (!logo) console.log("  WARN: no lib/logo.json — the logo will not render; run scripts/embed-logo.mjs");
+if (derivedUsed.size) {
+  console.log(`  PROVISIONAL: ${derivedUsed.size} component(s) came from derived library entries (${[...derivedUsed].sort().join(", ")}).`);
+  console.log("  Widths are estimates. Fine for mockups; validate with --allow-derived, and journey-coder will refuse this scene.");
+}

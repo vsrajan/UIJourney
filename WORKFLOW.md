@@ -48,6 +48,7 @@ where the repo is hosted.
 | 2 | `design-data-extractor` | `docs/token-source.md`, `src/components/ui/*.tsx` | `scripts/extract-*.mjs`, `data/tokens.json`, `data/component-manifest.json`, `data/extraction-report.md`, GitLab CI freshness job | `node scripts/validate-manifest.mjs` exits zero; MR review: check extraction report coverage + standards diff |
 | 2a | **(manual, not an agent)** `node scripts/embed-logo.mjs <sanctioned-logo-url>` | the logo URL from `docs/uds-standards.md` | `lib/logo.json` | commit it; check the reported dimensions match the real mark |
 | 3 | `excalidraw-librarian` | `data/*.json`, Storybook or a render harness | `data/measurements.json`, `lib/uds.excalidrawlib`, `lib/index.json`, `lib/CATALOG.md` | MR review: spot-check library shapes in Excalidraw |
+| 3-lite | `excalidraw-librarian-lite` *(only when the kit will not build)* | `data/*.json`, `scripts/tailwind-metrics.mjs` | same files, every entry stamped `derived`; **no** `data/measurements.json` | `validate-lib.mjs --allow-derived` clean; MR marked provisional |
 | 4 | `guardrails-engineer` | `data/tokens.json`, `docs/uds-standards.md` | UDS lint rules, `uijourney-compliance` job in `.gitlab-ci.yml`, `docs/compliance.md` | MR review + maintainer enables **Settings → Merge requests → "Pipelines must succeed"** |
 
 Merge each MR before launching the next agent — the CI freshness checks
@@ -90,6 +91,25 @@ same MR branch gains src/screens/<name>/*.tsx + codegen-report.md
         ▼
 normal MR review → merge
 ```
+
+### The provisional track
+
+When the kit cannot be installed, step 3-lite substitutes a **derived**
+library: heights, padding, radii and every colour are exact — those come
+from class strings and `data/tokens.json`, neither of which needs a browser
+— while widths of content-sized components are estimates.
+
+Provenance travels with the artifact. `compose-scene.mjs` stamps any scene
+built from derived entries `customData.provisional: true`;
+`validate-scene.mjs` refuses it without `--allow-derived`; `journey-coder`
+refuses it outright. So the sketcher/designer loop runs normally and codegen
+stays closed until the library is real.
+
+Because both librarians write the same filenames, fixing the environment and
+re-running `excalidraw-librarian` overwrites the derived library in place.
+Recompose the same `spec.json` and the mockup upgrades to measured geometry
+with no redesign — which is why it is worth designing against a provisional
+library rather than waiting.
 
 Three rules keep the loop honest:
 

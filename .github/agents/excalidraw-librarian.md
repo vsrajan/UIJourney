@@ -39,6 +39,13 @@ convention. Read the coverage and typography sections carefully.
   `scripts/ensure-parser.mjs` does not help here — that installs a tool,
   whereas rendering needs the kit's own dependency tree.
 
+  If the developer needs to keep designing while that is sorted out, point
+  them at **`excalidraw-librarian-lite`**, which builds the same library
+  with geometry derived from Tailwind classes, stamped `derived` so it can
+  never reach codegen. Do not do that work yourself — running it is the
+  developer's decision, and it produces a different, clearly-labelled
+  artifact.
+
   **Never infer geometry from Tailwind class names instead.** It looks
   reasonable and is wrong exactly where it matters: `h-8` really is 32px,
   but intrinsic text width, font metrics, `color-mix()` results and every

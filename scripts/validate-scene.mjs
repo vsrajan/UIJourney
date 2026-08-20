@@ -22,6 +22,7 @@ function optFlag(name, fallback) {
 }
 const typographyPath = optFlag("typography", "lib/typography.json");
 const tokensPath = optFlag("tokens", "data/tokens.json");
+const allowDerived = argv.includes("--allow-derived");
 if (!scenePath) {
   console.error("usage: node scripts/validate-scene.mjs <journey.excalidraw> [uds.excalidrawlib] [--typography p] [--tokens p]");
   process.exit(2);
@@ -356,6 +357,16 @@ for (const f of frames) {
 
 if (tokenResolutionFailed) {
   warns.push(`could not resolve some semantic colours via ${tokensPath} — colour conformance was skipped for those tokens`);
+}
+
+// A scene composed from derived library entries carries its own provenance.
+// Heights are exact, widths are estimates — good enough to design against,
+// not good enough to generate layout code from.
+if (scene.customData?.provisional) {
+  const which = (scene.customData.derivedComponents ?? []).join(", ") || "unknown components";
+  const msg = `scene is PROVISIONAL — ${which} came from library entries whose geometry was derived from Tailwind classes, not measured`;
+  if (allowDerived) warns.push(`${msg}; widths are estimates and journey-coder will refuse this scene`);
+  else errors.push(`${msg}. Re-run the librarian to measure for real, or pass --allow-derived to accept a mockup-only scene`);
 }
 
 for (const w of warns) console.log(`WARN:  ${w}`);

@@ -16,6 +16,14 @@ do not reinterpret a picture.
   and pull the latest — the developer may have hand-edited the scene after
   the designer agent last wrote it, and their edits are authoritative.
 - The approved `journeys/<name>/journey.excalidraw` on that branch.
+- **The scene must not be provisional.** If its top-level `customData` has
+  `provisional: true`, stop immediately and report: the mockup was composed
+  from a derived library (geometry inferred from Tailwind classes, not
+  measured), so its widths are estimates and any layout you generate from
+  them would be guesswork wearing the kit's name. The fix is to get the kit
+  building and re-run `excalidraw-librarian`, then recompose — the spec is
+  unchanged, so this costs one command, not a redesign. Do not strip the
+  flag, and do not proceed because the numbers look plausible.
 - `data/component-manifest.json` and `data/tokens.json`.
 - Confirm in one sentence before starting: "Generating code for
   `<journey name>` from the current scene on `<branch>` — this assumes the
