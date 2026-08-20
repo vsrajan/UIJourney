@@ -187,11 +187,18 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
   // Bound labels get real coordinates, centred in their container. Excalidraw
   // honours stored x/y on import, so a label left at the library's offset (or
   // at 0,0) renders detached from its component.
+  //
+  // Both axes are derived from font metrics rather than from the height the
+  // library happened to store. Substituting a label already recomputes its
+  // width, so trusting the stored height centred labels horizontally and not
+  // vertically — a glyph whose text box was authored the full height of its
+  // container put every label hard against the top.
   const byId = Object.fromEntries(out.map((e) => [e.id, e]));
   for (const el of out) {
     if (el.type !== "text" || !el.containerId) continue;
     const c = byId[el.containerId];
     if (!c) continue;
+    el.height = textHeight(el.text, el.fontSize, el.lineHeight);
     el.x = c.x + (c.width - el.width) / 2;
     el.y = c.y + (c.height - el.height) / 2;
   }
@@ -199,6 +206,9 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
 }
 
 const textWidth = (t, size) => Math.ceil(String(t).length * size * 0.6);
+// The box a run of text actually occupies, one line-height per line.
+const textHeight = (t, size = 16, lineHeight = 1.25) =>
+  Math.round(size * lineHeight) * Math.max(1, String(t ?? "").split("\n").length);
 
 // Props that carry visible copy, most specific first.
 const TEXT_PROPS = ["title", "label", "text", "placeholder", "heading"];

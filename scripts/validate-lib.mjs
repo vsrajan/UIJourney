@@ -271,6 +271,18 @@ for (const item of lib.libraryItems ?? []) {
       errors.push(`${name}: bordered shape has strokeWidth ${el.strokeWidth ?? 1} — use 2; 1px light strokes vanish when Excalidraw fits a journey to screen`);
     }
   }
+  // A text box taller than its own line height makes any consumer that
+  // vertically centres it place the glyphs too high. The composer normalises
+  // this now, but an inflated box is still a builder bug worth naming.
+  for (const el of els) {
+    if (el.type !== "text") continue;
+    const lines = Math.max(1, String(el.text ?? "").split("\n").length);
+    const natural = Math.round((el.fontSize ?? 16) * (el.lineHeight ?? 1.25)) * lines;
+    if ((el.height ?? 0) > natural * 1.5) {
+      warns.push(`${name}: text "${String(el.text ?? "").slice(0, 24)}" has height ${el.height} for ${lines} line(s) at ${el.fontSize}px (natural ${natural}) — an inflated text box mis-centres the label vertically`);
+    }
+  }
+
   if (container && container.type !== "text" && !container.customData?.resize) {
     warns.push(`${name}: container has no customData.resize hint ("horizontal" | "both" | "none") — designers won't know what they may stretch`);
   }
