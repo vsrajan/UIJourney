@@ -30,6 +30,39 @@ convention. Read the coverage and typography sections carefully.
   otherwise create `scripts/render-harness/` — a minimal Vite page that
   renders one component variant per route with the real global CSS loaded.
 
+  **If the kit does not build, stop.** No `node_modules`, a failing
+  `pnpm install`, no React or Vite — none of that is a puzzle to route
+  around, it is a blocked run. Report what failed (a pilot run was blocked
+  by `@uwr/icons` missing from the corporate registry) and say plainly that
+  the librarian needs an environment where the kit builds: a machine whose
+  `node_modules` is already installed, or CI. The parser sandbox in
+  `scripts/ensure-parser.mjs` does not help here — that installs a tool,
+  whereas rendering needs the kit's own dependency tree.
+
+  **Never infer geometry from Tailwind class names instead.** It looks
+  reasonable and is wrong exactly where it matters: `h-8` really is 32px,
+  but intrinsic text width, font metrics, `color-mix()` results and every
+  `compoundVariants` override are only knowable from a render — and
+  intrinsic width is what sets a Button's size in a mockup. If you build a
+  provisional library anyway for prototyping, every entry must be stamped
+  `customData.source: "derived"` and validated with `--allow-derived`; it
+  must never feed codegen.
+
+## Provenance: every entry declares how its geometry was obtained
+
+`customData.source` is one of `measured` (read back from a real DOM render),
+`composite` (assembled from measured parts — **must** also declare
+`customData.composedOf` naming them), `typography` (from
+`lib/typography.json`), or `derived` (inferred from class names, blocked
+unless the run passes `--allow-derived`).
+
+Stamp what actually happened. A pilot run that could not render computed
+geometry from Tailwind classes and stamped it `composite`, which passed
+because `composite` then carried no obligation — 156 entries that read as
+trustworthy and were guesses. The validator now requires `composedOf` and
+checks those parts have measurement rows, so the only way to record
+unrendered geometry is to call it `derived`.
+
 ## Coverage: the manifest is the work list, skips.json is the exception log
 
 - **Every component in `data/component-manifest.json` needs at least one

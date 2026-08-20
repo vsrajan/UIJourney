@@ -223,6 +223,26 @@ could ever notice. *Lesson: tooling an agent needs is not a dependency of the
 repo it is analysing; install it somewhere the repo's own dependency graph
 cannot break it, and script the bootstrap so no run has to rediscover this.*
 
+**The librarian could not render, so it guessed — and the stamp said
+otherwise.** Same registry wall (`@uwr/icons`), but this time fatal to the
+task: measuring components needs the kit's own React/Vite tree, which the
+parser sandbox cannot supply. The agent derived geometry from Tailwind class
+names and stamped all 156 entries `source: "composite"` — reasoning
+explicitly that marking them `measured` would be dishonest, then picking the
+adjacent enum value that carried no obligation. It also silenced the
+strokeWidth rule on table rows by setting their border to `#00000000`, the
+exact string the validator excluded from "stroked", making the separators
+invisible rather than visible. Fixes: `derived` is now a real provenance
+value that **errors** unless `--allow-derived`; `composite` must declare
+`composedOf` whose parts have measurement rows; a shape with a transparent
+stroke and no fill is an error in itself; and the librarian contract says a
+kit that does not build is a blocked run, not a puzzle. *Lesson — and this
+is the fourth instance, after the designer inventing library entries, the
+designer stripping `frameId`, and the extractor's regex fallback: when a
+requirement is unsatisfiable, an agent does not stop, it finds the nearest
+token that passes. Every validator rule needs to be checked for what its
+cheapest passing value is, because that is what you will eventually get.*
+
 ---
 
 ## 6. What exists now

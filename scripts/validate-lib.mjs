@@ -109,7 +109,21 @@ const REQUIRED_COMPOSITES = ["AppHeader", "Heading", "Text", "Link"];
 
 // How an entry came to exist. Recorded on the container as customData.source
 // so derived entries can never masquerade as measured ones.
-const SOURCES = new Set(["measured", "typography", "composite"]);
+//
+//   measured   — geometry read back from a real DOM render
+//   composite  — assembled from parts that were themselves measured; must
+//                declare customData.composedOf naming them
+//   typography — geometry comes from lib/typography.json, not a render
+//   derived    — inferred from Tailwind classes without rendering. Blocked
+//                unless --allow-derived. A pilot run could not install the
+//                kit's deps, computed geometry from class names, and stamped
+//                it "composite" — which passed, because "composite" carried
+//                no obligation. Class analysis gets h-8 = 32px right and
+//                intrinsic text width, font metrics and color-mix() results
+//                wrong, so those entries are guesses wearing a measurement's
+//                label.
+const SOURCES = new Set(["measured", "typography", "composite", "derived"]);
+const allowDerived = argv.includes("--allow-derived");
 
 // Measured geometry, keyed by component -> array of rows carrying the axis
 // values plus the measured values. Optional; when present, every "measured"
@@ -125,6 +139,28 @@ function measuredRowExists(component, axes, props) {
   if (!Array.isArray(rows)) return false;
   if (Object.keys(axes).length === 0) return rows.length > 0;
   return rows.some((row) => Object.keys(axes).every((axis) => String(row[axis] ?? "default") === String(props[axis] ?? "default")));
+}
+
+function componentHasMeasurements(component) {
+  if (!measurements) return true;
+  const rows = Array.isArray(measurements)
+    ? measurements.filter((r) => (r.component ?? r.name) === component)
+    : measurements[component];
+  return Array.isArray(rows) && rows.length > 0;
+}
+
+// Treats 8-digit hex with a zero alpha the same as the word "transparent".
+// The literal "#00000000" was the string a pilot run reached for to make the
+// stroke-width rule stop firing on table rows: it satisfied the check and
+// made the separators invisible, which is the opposite of what the rule is
+// for. Anything that renders nothing is now its own error.
+function isTransparent(color) {
+  if (!color) return true;
+  const c = String(color).trim().toLowerCase();
+  if (c === "transparent" || c === "none") return true;
+  if (/^#[0-9a-f]{6}00$/.test(c)) return true;
+  if (/^#[0-9a-f]{3}0$/.test(c)) return true;
+  return /^rgba\([^)]*,\s*0?(\.0+)?\s*\)$/.test(c);
 }
 
 // Components whose glyph must NOT be the rect-with-bound-text template.
@@ -219,7 +255,12 @@ for (const item of lib.libraryItems ?? []) {
   for (const el of els) {
     if (el.type === "text" || el.type === "frame") continue;
     const thin = Math.min(el.width ?? 0, el.height ?? 0) <= 4;
-    const stroked = el.strokeColor && el.strokeColor !== "transparent" && el.strokeColor !== "#00000000";
+    const stroked = !isTransparent(el.strokeColor);
+    const filled = !isTransparent(el.backgroundColor);
+    if (!stroked && !filled && el.type !== "image") {
+      errors.push(`${name}: a ${el.type} with a transparent stroke and no fill renders nothing — if it is there to show a border, give it the real --border colour at strokeWidth 2; if it is not needed, remove it`);
+      continue;
+    }
     if (thin) {
       // Hairline rules (Separator, Progress track) are drawn by their fill,
       // so they need real thickness rather than a thicker stroke.
@@ -272,7 +313,27 @@ for (const item of lib.libraryItems ?? []) {
   // ------- provenance
   const source = container?.customData?.source;
   if (component && !SOURCES.has(source)) {
-    errors.push(`${name}: container must declare customData.source ("measured" | "typography" | "composite") — provenance is what stops derived entries from passing as measured ones`);
+    errors.push(`${name}: container must declare customData.source ("measured" | "composite" | "typography" | "derived") — provenance is what stops derived entries from passing as measured ones`);
+  }
+  if (source === "derived") {
+    const msg = `${name}: source "derived" — geometry inferred from Tailwind classes, not rendered`;
+    if (allowDerived) warns.push(`${msg}; the library is provisional until it is re-measured`);
+    else errors.push(`${msg}. Fix the render harness and measure, or re-run with --allow-derived to accept a provisional library for prototyping only — it must not feed codegen`);
+  }
+  // "composite" means assembled from measured parts. Without naming those
+  // parts it is an unfalsifiable claim, and became the escape hatch a pilot
+  // run used to ship unmeasured geometry.
+  if (source === "composite") {
+    const composedOf = container?.customData?.composedOf;
+    if (!Array.isArray(composedOf) || !composedOf.length) {
+      errors.push(`${name}: source "composite" must declare customData.composedOf naming the measured components it is built from`);
+    } else if (measurements) {
+      const unmeasured = composedOf.filter((c) => !BARE_TEXT.has(c) && !componentHasMeasurements(c));
+      if (unmeasured.length) {
+        const verb = unmeasured.length === 1 ? "has" : "have";
+        errors.push(`${name}: composed of ${unmeasured.join(", ")}, which ${verb} no rows in ${measurementsPath} — a composite of unmeasured parts is a derived entry, stamp it "derived"`);
+      }
+    }
   }
 
   // ------- record variant x size combination
