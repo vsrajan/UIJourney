@@ -36,8 +36,19 @@ validation cycles; the same screen composed from a spec passes first time.
   you do not).
 
 ## Steps
-1. If a spec exists and the developer approved a sketch, start from it.
-   Otherwise write `journeys/<kebab-name>/spec.json` per
+1. **If `journeys/<name>/spec.json` exists, it is authoritative — use it
+   verbatim.** It is the settled output of the developer's sketching
+   rounds, and re-deriving it from a prose description silently discards
+   that work. Do not "improve" it, do not regenerate it, do not reconcile
+   it against an older story description: where the two disagree, the spec
+   is the later decision. If something in it looks wrong, ask in chat
+   rather than changing it.
+
+   Composition is deterministic, so an untouched spec yields exactly the
+   scene the developer already previewed. Your job here is delivery —
+   validation, branch, commit, MR — not design.
+
+   Only when no spec exists do you write one yourself, per
    `docs/spec-schema.md`, asking any clarifying questions in chat first,
    consolidated.
 2. Compose and validate:
