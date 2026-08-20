@@ -141,6 +141,7 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
   const freeTextCount = item.elements.filter((e) => e.type === "text" && !e.containerId).length;
 
   const out = [];
+  const dropped = new Set();
   for (const el of item.elements) {
     const isAnchor = el.id === anchor.id;
     const spans = (el.width ?? 0) >= anchor.width * 0.5;
@@ -178,6 +179,14 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
       if (t === undefined && !el.containerId && freeTextCount === 1) t = texts.__label;
       if (t != null) { clone.text = t; clone.originalText = t; clone.width = textWidth(t, el.fontSize); }
     }
+    // An explicit "" means "this component has no label here" — drop the
+    // element rather than leaving an empty box. Without a way to say that,
+    // a glyph's placeholder copy is unremovable: the Checkbox shipped with
+    // the word "Label", and every row of a table inherited it.
+    if (clone.type === "text" && clone.text === "") {
+      dropped.add(clone.id);
+      continue;
+    }
     if (isAnchor && Object.keys(props).length) {
       clone.customData = { ...clone.customData, props: { ...(clone.customData?.props ?? {}), ...props } };
     }
@@ -193,6 +202,14 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
   // width, so trusting the stored height centred labels horizontally and not
   // vertically — a glyph whose text box was authored the full height of its
   // container put every label hard against the top.
+  // Containers must not keep pointing at a label that no longer exists.
+  if (dropped.size) {
+    for (const el of out) {
+      if (!Array.isArray(el.boundElements)) continue;
+      el.boundElements = el.boundElements.filter((b) => !dropped.has(b.id));
+    }
+  }
+
   const byId = Object.fromEntries(out.map((e) => [e.id, e]));
   for (const el of out) {
     if (el.type !== "text" || !el.containerId) continue;
@@ -350,6 +367,7 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
       const ch = checkEntry.anchor.height ?? 16;
       out.push(...instantiate(checkEntry, {
         x: x + 12, y: ry + Math.round((rowH - ch) / 2), frameId,
+        texts: { __label: "", Checkbox: "" }, // a row selector carries no label
       }));
     }
     columns.forEach((c, i) => {

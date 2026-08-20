@@ -61,7 +61,7 @@ Screens are placed left to right in `step` order. Each gets a
 |---|---|
 | `component` | Library component name, e.g. `Button`, `Input`, `Card` |
 | `variant` | Library variant, default `"default"` |
-| `text` | Label/content. For a bound-label component this replaces the label |
+| `text` | Label/content. For a bound-label component this replaces the label. **`""` removes it** — a glyph ships with placeholder copy ("Label", "Placeholder"), and an empty string is how you say this instance has none |
 | `typography` | For `Heading` / `Text` / `Link`: a token from `lib/typography.json` |
 | `props` | Concrete props. String values that name a variant axis (`size`, `tone`) select the library entry; `title`/`label`/`placeholder` supply visible copy; table data is rendered (below). Everything else is recorded in `customData.props` for codegen |
 | `width` | Override width. Only honoured where the library entry allows resizing |
@@ -77,6 +77,17 @@ Two sugars:
   Heading/Text/Link. Give a node an explicit `width` to override, and any node
   whose natural width is unknown shares the leftover space. If the row is
   wider than the content column it falls back to an even split.
+
+## Nothing outside the spec survives
+
+The scene is generated from the spec every time `compose-scene.mjs` runs, so
+an edit made anywhere else — in the `.excalidraw` file, in Excalidraw itself
+— is discarded on the next compose. If a change should persist it has to be
+expressed here, in the library, or in the composer. This is deliberate: it is
+what lets a composer fix or a re-measured library upgrade every existing
+journey without redesigning anything. The corollary is that "I removed it and
+it came back" always means the removal happened somewhere the spec does not
+read.
 
 ## Variant axes
 

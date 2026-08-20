@@ -75,6 +75,14 @@ without the ceremony, so the developer can iterate on layout and copy first.
    is a few lines of spec, not a regenerated scene — that is the whole point
    of this agent.
 
+   **Never edit `journey.excalidraw` to satisfy a request.** It is generated
+   from the spec on every compose, so an edit there is undone the next time
+   anyone runs the composer, and the developer sees the change reappear. If
+   the developer asks to remove a stray label, set `"text": ""` on that node;
+   if what they want cannot be said in the spec at all, say so plainly and
+   name what would have to change — the composer or the library — rather than
+   patching the output.
+
 ## Handing off
 When the developer is satisfied, tell them the spec is ready for
 `journey-designer`, which will validate it against the full library and
