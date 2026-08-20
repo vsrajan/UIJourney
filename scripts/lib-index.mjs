@@ -21,8 +21,20 @@ export function axesOf(customData = {}) {
   return axes;
 }
 
+// Fallback for a library that encodes its axes only in the item name
+// ("Button/positive/sm"). The librarian contract requires the values in
+// customData.props, but a library that omits them would silently serve the
+// default size for every request, so the name is read as unkeyed tags and
+// matched by value. Only consulted when the keyed axes cannot answer.
+function nameTags(item, component) {
+  const name = typeof item?.name === "string" ? item.name : "";
+  const parts = name.split("/").map((p) => p.trim()).filter(Boolean);
+  if (parts[0] !== component) return [];
+  return parts.slice(1);
+}
+
 export function buildIndex(lib) {
-  const byComponent = new Map(); // component -> [{ axes, item, anchor, source }]
+  const byComponent = new Map(); // component -> [{ axes, tags, item, anchor, source }]
   const axisKeys = new Map();    // component -> Set of axis names seen
   for (const item of lib.libraryItems ?? []) {
     for (const el of item.elements ?? []) {
@@ -34,7 +46,9 @@ export function buildIndex(lib) {
         byComponent.set(component, []);
         axisKeys.set(component, new Set());
       }
-      byComponent.get(component).push({ axes, item, anchor: el, source: el.customData.source });
+      byComponent.get(component).push({
+        axes, tags: nameTags(item, component), item, anchor: el, source: el.customData.source,
+      });
       for (const k of Object.keys(axes)) axisKeys.get(component).add(k);
     }
   }
@@ -49,9 +63,12 @@ export function lookupEntry(index, component, wanted = {}) {
   if (!candidates?.length) return null;
 
   const keys = index.axisKeys.get(component) ?? new Set();
-  const want = {};
+  const want = {};       // axes the library declares as keyed props
+  const byValue = [];    // requested values whose axis the library never names
   for (const [k, v] of Object.entries(wanted)) {
-    if (typeof v === "string" && keys.has(k)) want[k] = v;
+    if (typeof v !== "string") continue;
+    if (keys.has(k)) want[k] = v;
+    else if (k !== "variant" && v !== "default" && candidates.some((c) => c.tags.includes(v))) byValue.push(v);
   }
 
   let best = null;
@@ -63,6 +80,12 @@ export function lookupEntry(index, component, wanted = {}) {
       const cv = cand.axes[k] ?? "default";
       if (cv === v) score += 2;
       else { ok = false; break; }
+    }
+    if (ok) {
+      for (const v of byValue) {
+        if (cand.tags.includes(v)) score += 2;
+        else { ok = false; break; }
+      }
     }
     if (!ok) continue;
     score -= Object.keys(cand.axes).length * 0.01;
