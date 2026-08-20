@@ -26,6 +26,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildIndex, lookupEntry, unmatchedAxes } from "./lib-index.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const argv = process.argv.slice(2);
@@ -81,25 +82,22 @@ const BACKGROUND = resolveColor("--background", "#F4F3EE");
 
 // Index every component-bearing element, and keep the whole item so a
 // composite can be cloned as a unit.
-const entries = new Map(); // "Component/variant" -> { item, anchor, source }
-for (const item of lib.libraryItems ?? []) {
-  for (const el of item.elements ?? []) {
-    const c = el.customData?.component;
-    if (!c) continue;
-    if (el.type === "text" && el.containerId) continue;
-    const key = `${c}/${el.customData.variant ?? "default"}`;
-    if (!entries.has(key)) entries.set(key, { item, anchor: el, source: el.customData.source });
-  }
-}
+const libIndex = buildIndex(lib);
 
 // Components placed from a library entry whose geometry was derived from
 // Tailwind classes rather than measured. Tracked so the scene can declare
 // itself provisional: heights are exact, widths are estimates, and codegen
 // must not read layout off a scene built from estimates.
 const derivedUsed = new Set();
-function lookup(component, variant = "default") {
-  return entries.get(`${component}/${variant}`) ?? entries.get(`${component}/default`) ?? null;
+// Axis values a node asks for: its variant plus any string-valued prop that
+// the library says is an axis for this component (size, tone, ...).
+function wantedAxes(node) {
+  return { variant: node.variant ?? "default", ...(node.props ?? {}) };
 }
+function lookup(component, node = {}) {
+  return lookupEntry(libIndex, component, wantedAxes(node));
+}
+const degraded = [];
 
 // ----------------------------------------------------------------- ids
 
@@ -123,10 +121,15 @@ const stamp = (el) => ({ ...BASE, ...el, seed: hash(el.id) % 2147483647, version
 // -------------------------------------------------------------- cloning
 
 // Clone a library item's elements to (x, y), optionally widening it.
-// Widening stretches the anchor plus any element that was full-bleed in the
-// original (within 2px of the anchor's width); everything else keeps its
-// relative offset. That covers AppHeader (bar stretches, logo stays left)
-// and Card (surface stretches, contents are placed by the caller).
+//
+// Widening rules, in order: the anchor always grows; a child spanning at
+// least half the anchor grows with it (table header and row bands, card
+// surfaces); a smaller child sitting in the right-hand half shifts right so
+// right-aligned chrome stays right-aligned; everything else keeps its offset.
+//
+// The original rule only grew children within 2px of the anchor's width,
+// which left a widened DataTable with a 1000px panel and 560px rows — the
+// ragged edge you see when a glyph is stretched but its innards are not.
 function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
   const { item, anchor } = entry;
   const dx = x - anchor.x;
@@ -134,11 +137,14 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
   const grow = width != null && width !== anchor.width ? width - anchor.width : 0;
   const idMap = new Map();
   for (const el of item.elements) idMap.set(el.id, nextId(el.customData?.component?.toLowerCase() ?? el.type));
+  const rootComponent = anchor.customData?.component;
+  const freeTextCount = item.elements.filter((e) => e.type === "text" && !e.containerId).length;
 
   const out = [];
   for (const el of item.elements) {
     const isAnchor = el.id === anchor.id;
-    const fullBleed = Math.abs((el.width ?? 0) - anchor.width) <= 2;
+    const spans = (el.width ?? 0) >= anchor.width * 0.5;
+    const inRightHalf = (el.x ?? 0) - anchor.x > anchor.width * 0.5;
     const clone = {
       ...JSON.parse(JSON.stringify(el)),
       id: idMap.get(el.id),
@@ -146,16 +152,30 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
       y: el.y + dy,
       frameId,
     };
-    if (grow && (isAnchor || fullBleed)) clone.width = (el.width ?? 0) + grow;
+    if (grow) {
+      if (isAnchor || spans) clone.width = (el.width ?? 0) + grow;
+      else if (inRightHalf) clone.x += grow;
+    }
 
     if (el.containerId) clone.containerId = idMap.get(el.containerId);
     if (Array.isArray(el.boundElements)) {
       clone.boundElements = el.boundElements.map((b) => ({ ...b, id: idMap.get(b.id) ?? b.id }));
     }
-    // Text content: named override, else the component's own override.
+    // Text content. A composite's label reaches us three ways: bound to its
+    // container, named for the component itself, or as a free text element
+    // the glyph names after its parent (AppHeader -> AppHeaderTitle). The
+    // third case is why "Application Title" once survived into a mockup whose
+    // spec said "DIF Application".
     const comp = el.customData?.component ?? item.elements.find((e) => e.id === el.containerId)?.customData?.component;
     if (el.type === "text") {
-      const t = texts[comp] ?? (el.containerId ? texts.__label : undefined);
+      let t = texts[comp];
+      if (t === undefined && el.containerId) t = texts.__label;
+      if (t === undefined && rootComponent && typeof comp === "string" && comp !== rootComponent && comp.startsWith(rootComponent)) {
+        t = texts.__label;
+      }
+      // A composite with exactly one free text has only one thing that text
+      // can be. With two, guessing would clobber a subtitle, so don't.
+      if (t === undefined && !el.containerId && freeTextCount === 1) t = texts.__label;
       if (t != null) { clone.text = t; clone.originalText = t; clone.width = textWidth(t, el.fontSize); }
     }
     if (isAnchor && Object.keys(props).length) {
@@ -180,6 +200,13 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
 
 const textWidth = (t, size) => Math.ceil(String(t).length * size * 0.6);
 
+// Props that carry visible copy, most specific first.
+const TEXT_PROPS = ["title", "label", "text", "placeholder", "heading"];
+function textFromProps(props = {}) {
+  for (const k of TEXT_PROPS) if (typeof props[k] === "string" && props[k]) return props[k];
+  return undefined;
+}
+
 function typographyEl({ component, typography: token, text, x, y, frameId, width }) {
   const scale = typography?.scale ?? {};
   const roles = typography?.roles ?? {};
@@ -198,6 +225,141 @@ function typographyEl({ component, typography: token, text, x, y, frameId, width
     frameId,
     customData: { component, typography: token, fontWeight: spec_.fontWeight, props: {}, resize: "horizontal" },
   });
+}
+
+
+// ------------------------------------------------------- table synthesis
+
+// Components the composer draws itself for a synthesized table. They have no
+// library entry by design — the library holds one DataTable glyph, and a
+// table's real shape is its columns, which only the spec knows.
+const TABLE_COMPONENTS = ["DataTable", "Table"];
+
+// Column label -> row key. Specs write human column names ("Short Description")
+// and terse row keys ("short"), so exact match, then prefix either way, then
+// fall back to position.
+function cellValue(row, columnLabel, index) {
+  if (Array.isArray(row)) return row[index] ?? "";
+  const norm = (t) => String(t).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const want = norm(columnLabel);
+  const keys = Object.keys(row);
+  const exact = keys.find((k) => norm(k) === want);
+  if (exact) return row[exact];
+  const prefix = keys.find((k) => want.startsWith(norm(k)) || norm(k).startsWith(want));
+  if (prefix) return row[prefix];
+  return Object.values(row)[index] ?? "";
+}
+
+const ACTION_VARIANTS = { approve: "positive", accept: "positive", confirm: "positive",
+  reject: "negative", delete: "negative", remove: "negative", decline: "negative" };
+function actionSpec(a) {
+  if (a && typeof a === "object") return { label: a.label ?? a.text ?? "", variant: a.variant ?? ACTION_VARIANTS[String(a.label ?? "").toLowerCase()] ?? "default" };
+  return { label: String(a), variant: ACTION_VARIANTS[String(a).toLowerCase()] ?? "default" };
+}
+
+// Builds a table from the spec's own data, using the library glyph only for
+// its colours and band heights. Returns { elements, height }.
+function synthesizeTable(entry, node, { x, y, width, frameId }) {
+  const props = node.props ?? {};
+  const rawColumns = (props.columns ?? []).map((c) => String(c));
+  const rows = props.rows ?? [];
+  const actions = (props.rowActions ?? []).map(actionSpec);
+  // A leading empty column header is how specs write the checkbox gutter.
+  const selectable = props.selectable === true || rawColumns[0] === "";
+  const columns = rawColumns.filter((c) => c !== "" && c.toLowerCase() !== "actions");
+
+  const surface = entry.anchor;
+  const kids = entry.item.elements.filter((e) => e.id !== surface.id && e.type === "rectangle");
+  const band = kids.find((e) => (e.width ?? 0) >= surface.width * 0.6 && e.height >= 24 && e.height <= 64);
+  const border = resolveColor("--border", "#DDDDDD");
+  const muted = resolveColor("--muted-foreground", "#6B6B6B");
+  const fg = resolveColor("--foreground", "#1C1C1C");
+  const surfaceFill = surface.backgroundColor ?? "#FFFFFF";
+  const zebra = band?.backgroundColor && band.backgroundColor !== "transparent" ? band.backgroundColor : "#F7F7F7";
+
+  const CHECK_W = selectable ? 40 : 0;
+  const checkEntry = selectable ? lookupEntry(libIndex, "Checkbox", {}) : null;
+  const actionEntries = actions.map((a) => ({ ...a, entry: lookupEntry(libIndex, "Button", { variant: a.variant, size: "sm" }) }));
+  const actionsW = actionEntries.length
+    ? actionEntries.reduce((sum, a) => sum + Math.max(a.entry?.anchor?.width ?? 72, textWidth(a.label, 12) + 24), 0) + GAP * (actionEntries.length - 1) + 16
+    : 0;
+
+  // Remaining width is split by content weight, so "Description" gets room a
+  // even split would give to "ID".
+  const weights = columns.map((c, i) => {
+    const longest = rows.reduce((m, r) => Math.max(m, String(cellValue(r, c, i)).length), c.length);
+    return Math.min(Math.max(longest, 6), 60);
+  });
+  const weightSum = weights.reduce((a, b) => a + b, 0) || 1;
+  const free = Math.max(200, width - CHECK_W - actionsW - 24);
+  const colW = weights.map((w) => Math.max(64, Math.round((w / weightSum) * free)));
+
+  const headerH = band?.height ?? 40;
+  const rowH = Math.max(band?.height ?? 44, 44);
+  const out = [];
+
+  const totalH = headerH + rowH * rows.length;
+  out.push(stamp({
+    id: nextId("datatable"), type: "rectangle", x, y, width, height: totalH,
+    strokeColor: surface.strokeColor ?? border, backgroundColor: surfaceFill,
+    strokeWidth: Math.max(surface.strokeWidth ?? 2, 2), fillStyle: "solid", roughness: 0,
+    roundness: surface.roundness ?? null, frameId,
+    customData: { component: node.component, props, resize: "both", synthesized: true },
+  }));
+
+  const cellX = (i) => x + 12 + CHECK_W + colW.slice(0, i).reduce((a, b) => a + b, 0);
+  const textEl = (text, cx, cy, w, { size = 13, color = fg, weight } = {}) => stamp({
+    id: nextId("cell"), type: "text", x: cx, y: cy, width: Math.max(8, w), height: Math.round(size * 1.25),
+    strokeColor: color, backgroundColor: "transparent", strokeWidth: 0,
+    text: String(text), originalText: String(text), fontSize: size, fontFamily: 2,
+    textAlign: "left", verticalAlign: "top", containerId: null, lineHeight: 1.25, autoResize: false,
+    frameId, customData: { component: "TableCell", props: weight ? { weight } : {}, synthesized: true },
+  });
+
+  // Header band + labels.
+  out.push(stamp({
+    id: nextId("tablehead"), type: "rectangle", x, y, width, height: headerH,
+    strokeColor: border, backgroundColor: zebra, strokeWidth: 2, fillStyle: "solid",
+    roughness: 0, roundness: null, frameId,
+    customData: { component: "TableHeader", props: {}, synthesized: true },
+  }));
+  columns.forEach((c, i) => {
+    out.push(textEl(c, cellX(i), y + Math.round((headerH - 16) / 2), colW[i] - 12, { size: 13, color: muted, weight: 600 }));
+  });
+
+  // Rows.
+  rows.forEach((row, r) => {
+    const ry = y + headerH + r * rowH;
+    out.push(stamp({
+      id: nextId("tablerow"), type: "rectangle", x, y: ry, width, height: rowH,
+      strokeColor: border, backgroundColor: r % 2 ? zebra : surfaceFill, strokeWidth: 2,
+      fillStyle: "solid", roughness: 0, roundness: null, frameId,
+      customData: { component: "TableRow", props: {}, synthesized: true },
+    }));
+    if (checkEntry) {
+      const ch = checkEntry.anchor.height ?? 16;
+      out.push(...instantiate(checkEntry, {
+        x: x + 12, y: ry + Math.round((rowH - ch) / 2), frameId,
+      }));
+    }
+    columns.forEach((c, i) => {
+      out.push(textEl(cellValue(row, c, i), cellX(i), ry + Math.round((rowH - 16) / 2), colW[i] - 12));
+    });
+    let ax = x + width - actionsW + 8;
+    for (const a of actionEntries) {
+      if (!a.entry) continue;
+      const bw = Math.max(a.entry.anchor.width ?? 72, textWidth(a.label, 12) + 24);
+      const bh = a.entry.anchor.height ?? 32;
+      out.push(...instantiate(a.entry, {
+        x: ax, y: ry + Math.round((rowH - bh) / 2), width: bw, frameId,
+        texts: { __label: a.label, Button: a.label },
+        props: { variant: a.variant, size: "sm" },
+      }));
+      ax += bw + GAP;
+    }
+  });
+
+  return { elements: out, height: totalH };
 }
 
 // ---------------------------------------------------------------- layout
@@ -258,17 +420,34 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
         continue;
       }
 
-      const entry = lookup(comp, node.variant);
+      const entry = lookup(comp, node);
       if (!entry) die(`component "${comp}/${node.variant ?? "default"}" is not in the library — report the gap, do not substitute`);
       if (entry.source === "derived") derivedUsed.add(comp);
+      const missed = unmatchedAxes(entry, wantedAxes(node));
+      if (missed.length) degraded.push(`${comp}: asked for ${missed.join(", ")}`);
+
+      // A data table's shape is its columns; the library holds one generic
+      // glyph. When the spec supplies columns or rows, build the real thing.
+      if (TABLE_COMPONENTS.includes(comp) && ((node.props?.columns?.length) || (node.props?.rows?.length))) {
+        const tw = node.width ?? availWidth;
+        const built = synthesizeTable(entry, node, { x: originX, y, width: tw, frameId: fid });
+        elements.push(...built.elements);
+        y += built.height + (node.gap ?? GAP);
+        continue;
+      }
 
       const isHeader = comp === "AppHeader";
       const width = node.width ?? (isHeader ? fw : comp === "Card" ? Math.min(400, fw - 2 * CARD_PAD) : availWidth);
       const x = isHeader ? fx : node.center === false ? originX : originX;
 
+      // A composite's own label often arrives as a prop rather than `text`
+      // (AppHeader title, Input placeholder). Without this, the glyph's
+      // placeholder copy survives into the mockup — "Application Title"
+      // where the spec said "DIF Application".
+      const label = node.text ?? textFromProps(node.props);
       const created = instantiate(entry, {
         x, y: isHeader ? 0 : y, width, frameId: fid,
-        texts: { __label: node.text, [comp]: node.text },
+        texts: { __label: label, [comp]: label },
         props: node.props ?? {},
       });
       elements.push(...created);
@@ -305,16 +484,44 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
     }
   };
 
+  // Nodes in a row take their natural width — the library entry's own width,
+  // or the text's width for typography. Splitting the content column evenly
+  // is what turned two small buttons into two 490px slabs.
+  const naturalWidth = (node) => {
+    if (node.width != null) return node.width;
+    if (node.row) return null;
+    const comp = node.field?.component ?? node.component;
+    if (!comp) return null;
+    if (TYPOGRAPHY_COMPONENTS.has(comp)) {
+      const token = node.typography ?? (comp === "Link" ? "link" : "body-2");
+      const size = (typography?.scale ?? {})[token]?.fontSize ?? 14;
+      return textWidth(node.text ?? "", size);
+    }
+    const entry = lookup(comp, node);
+    return entry?.anchor?.width ?? null;
+  };
+
   const placeRow = (nodes, originX, availWidth) => {
     const startY = y;
+    const widths = nodes.map((n) => naturalWidth(n));
+    const known = widths.filter((w) => w != null).reduce((a, b) => a + b, 0);
+    const unknownCount = widths.filter((w) => w == null).length;
+    const gaps = GAP * Math.max(0, nodes.length - 1);
+    // Leftover space goes to nodes with no natural width; if the row is wider
+    // than the column, fall back to an even split so nothing runs off-screen.
+    let share = unknownCount ? Math.max(80, Math.floor((availWidth - known - gaps) / unknownCount)) : 0;
+    let resolved = widths.map((w) => w ?? share);
+    if (resolved.reduce((a, b) => a + b, 0) + gaps > availWidth) {
+      resolved = nodes.map(() => Math.floor((availWidth - gaps) / nodes.length));
+    }
     let x = originX;
     let tallest = 0;
-    for (const node of nodes) {
+    for (const [i, node] of nodes.entries()) {
       const saved = y;
       y = startY;
-      place([{ ...node, gap: 0 }], x, node.width ?? Math.floor(availWidth / nodes.length));
+      place([{ ...node, gap: 0 }], x, resolved[i]);
       tallest = Math.max(tallest, y - startY);
-      x += (node.width ?? Math.floor(availWidth / nodes.length)) + GAP;
+      x += resolved[i] + GAP;
       y = saved;
     }
     y = startY + tallest + GAP;

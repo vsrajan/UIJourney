@@ -11,6 +11,7 @@
 // Exits 1 on any ERROR. WARNs list items the developer should eyeball.
 
 import { readFileSync, existsSync } from "node:fs";
+import { buildIndex, lookupEntry, axesOf } from "./lib-index.mjs";
 
 const argv = process.argv.slice(2);
 const positional = argv.filter((a, i) => !a.startsWith("--") && !(i > 0 && argv[i - 1].startsWith("--")));
@@ -118,23 +119,24 @@ for (const f of frames) {
 // unregistered, so a scene that used them failed library conformance while
 // the per-frame rules simultaneously demanded them. That deadlock had no
 // escape that did not involve falsifying metadata.
+// Axis-aware, and shared with compose-scene.mjs so the two agree on which
+// entry an element came from. Keying on variant alone made every size look
+// like a size mismatch against the default-size entry.
 let libIndex = null;
-if (libPath) {
-  libIndex = new Map();
-  for (const item of (parse(libPath).libraryItems ?? [])) {
-    for (const c of item.elements ?? []) {
-      if (!c.customData?.component) continue;
-      if (c.type === "text" && c.containerId) continue; // bound labels are not components
-      const key = `${c.customData.component}/${c.customData.variant ?? "default"}`;
-      if (!libIndex.has(key)) libIndex.set(key, c);
-    }
-  }
+if (libPath) libIndex = buildIndex(parse(libPath));
+function libEntryFor(cd) {
+  if (!libIndex) return null;
+  return lookupEntry(libIndex, cd.component, axesOf(cd));
 }
 
 // Constructs the designer creates per screen that are deliberately not kit
 // components, so they have no library entry and are exempt from library
 // conformance. They are still checked by their own rules below.
-const SCENE_ONLY_COMPONENTS = new Set(["PageBackground"]);
+// Constructs the composer draws itself, which therefore have no library
+// entry: the page ground, and the parts of a table synthesized from spec data
+// (the library holds one generic DataTable glyph; a real table's shape is its
+// columns, which only the spec knows).
+const SCENE_ONLY_COMPONENTS = new Set(["PageBackground", "TableHeader", "TableRow", "TableCell"]);
 
 const PLACEHOLDER_HOSTS = new Set(["Input", "Textarea", "Select", "Combobox"]);
 
@@ -246,8 +248,13 @@ for (const el of els) {
   // Library conformance.
   if (libIndex && cd.component && el.type !== "text" && !SCENE_ONLY_COMPONENTS.has(cd.component)) {
     const key = `${cd.component}/${cd.variant ?? "default"}`;
-    const libEl = libIndex.get(key);
-    if (!libEl) {
+    const entry = libEntryFor(cd);
+    const libEl = entry?.anchor;
+    if (libEl && cd.synthesized) {
+      // Geometry composed from spec data rather than cloned from the glyph.
+      // The component must still exist in the library; its size is the
+      // composer's to decide.
+    } else if (!libEl) {
       errors.push(`${key} (${label}) does not exist in the library — compose only from library entries`);
     } else {
       const resize = libEl.customData?.resize ?? "none";
@@ -371,8 +378,8 @@ if (libIndex) {
   for (const el of els) {
     const comp = el.customData?.component;
     if (!comp) continue;
-    const entry = libIndex.get(`${comp}/${el.customData.variant ?? "default"}`) ?? libIndex.get(`${comp}/default`);
-    if (entry?.customData?.source === "derived") derivedInScene.add(comp);
+    const entry = libEntryFor(el.customData);
+    if (entry?.source === "derived") derivedInScene.add(comp);
   }
 }
 const stamped = scene.customData?.provisional === true;

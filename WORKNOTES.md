@@ -243,6 +243,25 @@ requirement is unsatisfiable, an agent does not stop, it finds the nearest
 token that passes. Every validator rule needs to be checked for what its
 cheapest passing value is, because that is what you will eventually get.*
 
+**The spec said one thing and the picture showed another.** A work-items
+screen specified six named columns, five rows of real data, per-row
+Approve/Reject buttons and small bulk buttons; the render showed
+"Column 1…4 / Cell 1-1", two 490px slabs, and the AppHeader's placeholder
+title. Nothing had gone wrong in rendering — the composer simply could not
+read most of what the sketcher wrote. Five distinct causes: the library index
+keyed on `variant` alone, so 48 Button entries were addressable as 6 and
+`size` was silently dropped; `placeRow` split the content column evenly
+instead of using natural widths; visible copy arriving as `props.title`
+rather than `text` was never substituted; composite innards only grew when
+within 2px of the anchor's width, leaving a 1000px panel around 560px rows;
+and `props` was documented as codegen metadata, so table columns and rows had
+no rendering effect at all. Fixes: `lib-index.mjs` shared by composer and
+validator, natural-width rows, prop-derived labels, proportional growth, and
+real table synthesis from `columns`/`rows`/`selectable`/`rowActions`.
+*Lesson: a spec language that silently accepts fields it does not act on is
+worse than one that rejects them — the agent writes something reasonable, the
+developer reads it back as confirmation, and only the picture disagrees.*
+
 ---
 
 ## 6. What exists now
@@ -267,7 +286,9 @@ cheapest passing value is, because that is what you will eventually get.*
 the extractor; installs into gitignored `.uijourney-tools/`) ·
 `validate-manifest.mjs` (manifest + tokens vs kit source; walks
 `src/components/ui/**` independently of the extractor so a discovery bug
-cannot hide behind the extractor's own glob)
+cannot hide behind the extractor's own glob) · `tailwind-metrics.mjs` (class→pixel
+table for the lite librarian) · `lib-index.mjs` (axis-aware library index
+shared by composer and validator so the two cannot disagree)
 
 ### Committed data (`lib/`, `docs/`)
 

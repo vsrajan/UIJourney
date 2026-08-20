@@ -45,6 +45,15 @@ without the ceremony, so the developer can iterate on layout and copy first.
    `docs/spec-schema.md`. Build **only the screens asked for**; if a
    transition needs a destination that was not requested, ask rather than
    inventing one. Use the developer's real copy, never lorem.
+
+   **For a table, write the real columns and a few real rows.** The composer
+   builds `DataTable`/`Table` from `props.columns`, `props.rows`,
+   `props.selectable` and `props.rowActions` rather than cloning the glyph,
+   so a work-items screen previews as its actual columns instead of
+   "Column 1…4". Three to five representative rows is the right number —
+   enough to show truncation and column balance, few enough to stay quick.
+   Reach for a variant axis the same way: `props: { "size": "sm" }` selects
+   the small Button, it is not decoration.
 3. If a component you need is absent from `lib/index.json`, stop and report
    the gap, naming the closest available alternative. Do not substitute
    silently.

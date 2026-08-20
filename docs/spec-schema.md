@@ -63,7 +63,7 @@ Screens are placed left to right in `step` order. Each gets a
 | `variant` | Library variant, default `"default"` |
 | `text` | Label/content. For a bound-label component this replaces the label |
 | `typography` | For `Heading` / `Text` / `Link`: a token from `lib/typography.json` |
-| `props` | Concrete props recorded in `customData.props` for codegen |
+| `props` | Concrete props. String values that name a variant axis (`size`, `tone`) select the library entry; `title`/`label`/`placeholder` supply visible copy; table data is rendered (below). Everything else is recorded in `customData.props` for codegen |
 | `width` | Override width. Only honoured where the library entry allows resizing |
 | `gap` | Space below this node, default 16 |
 | `children` | Nodes nested inside a container such as `Card` |
@@ -72,7 +72,56 @@ Two sugars:
 
 - `{ "field": { "label": "...", "component": "Input", ... } }` emits a `Label`
   and its control with the tighter 8px gap between them.
-- `{ "row": [node, node] }` places nodes side by side.
+- `{ "row": [node, node] }` places nodes side by side. Each node takes its
+  **natural width** — the library entry's own width, or the text's width for
+  Heading/Text/Link. Give a node an explicit `width` to override, and any node
+  whose natural width is unknown shares the leftover space. If the row is
+  wider than the content column it falls back to an even split.
+
+## Variant axes
+
+A node's `variant` plus any string-valued `props` are matched against the
+library's axes for that component. `{ "component": "Button", "variant":
+"positive", "props": { "size": "sm" } }` selects `Button/positive/sm`. The
+axes are whatever the kit's `cva` declares — the composer learns them from the
+library rather than assuming `variant` is the only one. An axis value with no
+matching entry degrades to the closest match and is reported at the end of the
+run, rather than failing.
+
+## Tables
+
+`DataTable` and `Table` are the one place where a component's content is its
+design, so the composer builds them from the spec instead of cloning the
+library glyph:
+
+```json
+{ "component": "DataTable", "width": 1000, "props": {
+    "columns": ["", "ID", "Name", "Short Description", "Description", "Actions"],
+    "rows": [
+      { "id": "WI-1001", "name": "Access Request", "short": "New user access provisioning",
+        "description": "Request to provision access for a new joiner..." }
+    ],
+    "selectable": true,
+    "rowActions": ["Approve", "Reject"]
+}}
+```
+
+| Key | Effect |
+|---|---|
+| `columns` | Header labels, left to right. An empty first entry means the checkbox gutter; a trailing `"Actions"` is implied by `rowActions` |
+| `rows` | Objects keyed loosely by column name (`"Short Description"` matches `short`), or plain arrays in column order |
+| `selectable` | Adds a real `Checkbox` from the library to every row |
+| `rowActions` | Per-row buttons. Strings pick a sensible variant (Approve→positive, Reject/Delete→negative); use `{ "label": ..., "variant": ... }` to choose |
+
+Column widths are weighted by their longest content, so a description column
+gets the room an even split would hand to an ID. Colours and band heights come
+from the library glyph; the structure comes from the spec. Table chrome the
+glyph may carry — a search box, pagination — is **not** synthesized: add it to
+the spec as its own node if the screen needs it.
+
+Synthesized elements carry `customData.synthesized: true`, which exempts them
+from library size conformance (their geometry is the composer's, not the
+glyph's) while still requiring the component to exist in the library.
 
 ## Transitions
 
