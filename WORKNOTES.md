@@ -244,7 +244,10 @@ cannot break it, and script the bootstrap so no run has to rediscover this.*
 `validate-lib.mjs` · `validate-scene.mjs` · `diff-manifest.mjs` ·
 `embed-logo.mjs` · `compose-scene.mjs` · `render-scene.mjs` ·
 `build-catalog.mjs` · `ensure-parser.mjs` (isolated `ts-morph` bootstrap for
-the extractor; installs into gitignored `.uijourney-tools/`)
+the extractor; installs into gitignored `.uijourney-tools/`) ·
+`validate-manifest.mjs` (manifest + tokens vs kit source; walks
+`src/components/ui/**` independently of the extractor so a discovery bug
+cannot hide behind the extractor's own glob)
 
 ### Committed data (`lib/`, `docs/`)
 

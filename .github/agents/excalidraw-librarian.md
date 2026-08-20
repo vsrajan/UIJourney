@@ -18,7 +18,11 @@ convention. Read the coverage and typography sections carefully.
 
 ## Inputs (verify these exist before anything else)
 - `data/tokens.json` and `data/component-manifest.json` (from
-  `design-data-extractor`). If missing or stale, stop and report.
+  `design-data-extractor`). If missing or stale, stop and report. Run
+  `node scripts/validate-manifest.mjs` first and **stop if it exits
+  non-zero** — the manifest is your work list, so building a library from an
+  incomplete one bakes the gap into every later phase while the coverage
+  figure still reads 100%.
 - `lib/typography.json` — the UDS type scale. Authority for every text
   entry (see Typography below).
 - `lib/skips.json` — declared coverage gaps you must maintain.

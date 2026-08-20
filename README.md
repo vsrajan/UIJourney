@@ -133,7 +133,8 @@ the GitLab UI.
    - `scripts/` (all of it — the mechanical quality gates and generators:
      `validate-lib.mjs`, `validate-scene.mjs`, `diff-manifest.mjs`,
      `embed-logo.mjs`, `compose-scene.mjs`, `render-scene.mjs`,
-     `build-catalog.mjs`, `ensure-parser.mjs`. Plain Node, no dependencies
+     `build-catalog.mjs`, `ensure-parser.mjs`, `validate-manifest.mjs`.
+     Plain Node, no dependencies
      except Playwright, which only the PNG preview needs, and `ts-morph`,
      which `ensure-parser.mjs` installs for the extractor into a gitignored
      `.uijourney-tools/` sandbox — never into your kit's `package.json`)
