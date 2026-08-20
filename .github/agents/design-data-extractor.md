@@ -17,8 +17,10 @@ output files must be traceable to a line of kit source code.
    `data/tokens.json`: every `--MyFirm-*` primitive with its resolved value,
    every semantic alias (`--primary`, `--background`, `--ring`, ...) resolved
    through the alias chain to a concrete color, for light and `.dark`.
-2. `scripts/extract-manifest.mjs` — walks `src/components/ui/**/*.tsx` (recursive) with the
-   TypeScript compiler API or `ts-morph`; emits `data/component-manifest.json`
+2. `scripts/extract-manifest.mjs` — walks `src/components/ui/**/*.tsx`
+   (recursive) and parses each file with `ts-morph`, obtained via
+   `loadTsMorph()` from `scripts/ensure-parser.mjs` (see step 2 of the
+   Steps section); emits `data/component-manifest.json`
    in this canonical shape (downstream agents and `validate-lib.mjs` read it):
 
    ```json
@@ -123,12 +125,31 @@ output files must be traceable to a line of kit source code.
 
 ## Steps
 1. Read `docs/token-source.md`; read the named CSS files.
-2. Write the three scripts. Use only dependencies already in the repo plus
-   `ts-morph`/`typescript` if needed. No network calls at runtime. You are
-   running on the developer's machine: install any new dev dependency
-   through the firm's configured npm registry/proxy, and if the install
-   fails, surface the exact error to the developer rather than working
-   around it.
+2. **Get the parser with `node scripts/ensure-parser.mjs`. Never run an
+   install in the repo root.** `npm install` / `pnpm add` at the root
+   re-resolves the kit's entire `package.json` before installing anything,
+   so a private package your registry does not serve (`@uwr/icons` and
+   friends) kills an install of a tool that has nothing to do with it. A
+   pilot run lost several minutes cycling through pnpm, npm, a regex
+   rewrite, and a hand-built temp directory on exactly this. The bootstrap
+   script installs `ts-morph` into a gitignored `.uijourney-tools/` sandbox
+   whose `package.json` names the parser and nothing else; it is idempotent,
+   and `extract-manifest.mjs` loads the parser with:
+
+   ```js
+   import { loadTsMorph } from "./ensure-parser.mjs";
+   const { Project } = await loadTsMorph();
+   ```
+
+   Two things follow. The kit's `package.json` and lockfile must be
+   **unchanged** in your MR — the parser is your tooling, not the kit's
+   dependency. And if the bootstrap genuinely fails, report the error and
+   stop: **do not fall back to parsing `cva()` with regular expressions.**
+   Regex quietly under-reports variant axes, and since coverage is measured
+   against the manifest, no later phase can detect what it missed.
+
+   Otherwise use only dependencies already in the repo, and make no network
+   calls at extraction runtime.
 3. Run them locally. Iterate until: zero unresolved aliases (or each one
    listed in the report), and every file under `src/components/ui/` appears
    in the coverage list as parsed or explained.
@@ -153,3 +174,6 @@ output files must be traceable to a line of kit source code.
   patched into the output.
 - Do not "fix" kit source while extracting. If a `cva()` call is unparseable,
   record it in the report and move on.
+- Do not modify the kit's `package.json`, lockfile, or `node_modules`. If
+  you find yourself debugging the kit's own dependency tree, you have gone
+  off task — you need a TypeScript parser, not a working kit install.

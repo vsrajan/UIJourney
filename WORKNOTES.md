@@ -208,6 +208,21 @@ stated verbatim in the agent file. Notably **the agent independently
 invented the builder-script approach**, which is the strongest argument for
 shipping it.
 
+**A root `pnpm add -D ts-morph` never installs ts-morph.** The extractor
+needed a TypeScript parser; installing it at the kit repo root made npm
+re-resolve the whole `package.json` first, which failed on a private
+`@uwr/icons` the developer's registry does not serve. The agent then thrashed
+— pnpm, npm, a regex rewrite, a hand-built temp directory — for several
+minutes before arriving at an isolated install. Fix: `scripts/ensure-parser.mjs`
+does exactly that deterministically, into a gitignored `.uijourney-tools/`
+sandbox whose `package.json` names ts-morph and nothing else, so the registry
+is never asked for a private package; the kit's lockfile stays out of the MR.
+The regex fallback is now explicitly forbidden — it under-reports variant
+axes, and coverage is measured against the manifest, so nothing downstream
+could ever notice. *Lesson: tooling an agent needs is not a dependency of the
+repo it is analysing; install it somewhere the repo's own dependency graph
+cannot break it, and script the bootstrap so no run has to rediscover this.*
+
 ---
 
 ## 6. What exists now
@@ -228,7 +243,8 @@ shipping it.
 
 `validate-lib.mjs` · `validate-scene.mjs` · `diff-manifest.mjs` ·
 `embed-logo.mjs` · `compose-scene.mjs` · `render-scene.mjs` ·
-`build-catalog.mjs`
+`build-catalog.mjs` · `ensure-parser.mjs` (isolated `ts-morph` bootstrap for
+the extractor; installs into gitignored `.uijourney-tools/`)
 
 ### Committed data (`lib/`, `docs/`)
 

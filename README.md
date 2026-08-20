@@ -133,8 +133,12 @@ the GitLab UI.
    - `scripts/` (all of it — the mechanical quality gates and generators:
      `validate-lib.mjs`, `validate-scene.mjs`, `diff-manifest.mjs`,
      `embed-logo.mjs`, `compose-scene.mjs`, `render-scene.mjs`,
-     `build-catalog.mjs`. Plain Node,
-     no dependencies except Playwright, which only the PNG preview needs)
+     `build-catalog.mjs`, `ensure-parser.mjs`. Plain Node, no dependencies
+     except Playwright, which only the PNG preview needs, and `ts-morph`,
+     which `ensure-parser.mjs` installs for the extractor into a gitignored
+     `.uijourney-tools/` sandbox — never into your kit's `package.json`)
+   - `.gitignore` (merge its two entries into yours; `.uijourney-tools/`
+     must stay untracked)
    - `docs/spec-schema.md` (the screen-spec format the agents write)
    - `lib/typography.json` (the UDS type scale — **verify its values against
      your standards doc before the first library build**; it is transcribed

@@ -1,0 +1,5 @@
+# Isolated parser sandbox created by scripts/ensure-parser.mjs.
+# Tooling for the extraction scripts, never a dependency of the kit.
+.uijourney-tools/
+
+node_modules/
