@@ -88,6 +88,13 @@ librarian and recomposing the same spec upgrades it with no redesign.
 Deliver it anyway. A provisional mockup that a developer can review is worth
 far more than a blocked run.
 
+**Never remove `customData.provisional` to make validation pass.** The flag
+is the only thing stopping `journey-coder` generating layout from estimated
+widths, and the validator re-derives it from the library anyway, so stripping
+it produces a worse error rather than a passing run. If validation complains
+about provisionality, the answer is the `--allow-derived` flag, never an edit
+to the scene.
+
 ## The rules the validator enforces
 
 Stated here so you never need to read the validator. The composer already

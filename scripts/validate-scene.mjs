@@ -362,11 +362,35 @@ if (tokenResolutionFailed) {
 // A scene composed from derived library entries carries its own provenance.
 // Heights are exact, widths are estimates — good enough to design against,
 // not good enough to generate layout code from.
-if (scene.customData?.provisional) {
-  const which = (scene.customData.derivedComponents ?? []).join(", ") || "unknown components";
+// Re-derived from the library rather than trusted from the scene's own stamp.
+// Deleting customData.provisional would otherwise be the cheapest way to make
+// this error stop firing — and this pipeline has four recorded cases of an
+// agent taking exactly that kind of shortcut. The library is the authority.
+const derivedInScene = new Set();
+if (libIndex) {
+  for (const el of els) {
+    const comp = el.customData?.component;
+    if (!comp) continue;
+    const entry = libIndex.get(`${comp}/${el.customData.variant ?? "default"}`) ?? libIndex.get(`${comp}/default`);
+    if (entry?.customData?.source === "derived") derivedInScene.add(comp);
+  }
+}
+const stamped = scene.customData?.provisional === true;
+if (derivedInScene.size || stamped) {
+  const which = derivedInScene.size
+    ? [...derivedInScene].sort().join(", ")
+    : (scene.customData?.derivedComponents ?? []).join(", ") || "unknown components";
   const msg = `scene is PROVISIONAL — ${which} came from library entries whose geometry was derived from Tailwind classes, not measured`;
   if (allowDerived) warns.push(`${msg}; widths are estimates and journey-coder will refuse this scene`);
   else errors.push(`${msg}. Re-run the librarian to measure for real, or pass --allow-derived to accept a mockup-only scene`);
+
+  if (derivedInScene.size && !stamped) {
+    errors.push(
+      `scene uses derived library entries (${[...derivedInScene].sort().join(", ")}) but is not stamped customData.provisional — ` +
+        `recompose with scripts/compose-scene.mjs rather than editing the scene. Never remove the flag to get past validation: ` +
+        `it is the only thing stopping journey-coder generating layout from estimated widths`
+    );
+  }
 }
 
 for (const w of warns) console.log(`WARN:  ${w}`);
