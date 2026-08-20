@@ -124,6 +124,7 @@ const REQUIRED_COMPOSITES = ["AppHeader", "Heading", "Text", "Link"];
 //                label.
 const SOURCES = new Set(["measured", "typography", "composite", "derived"]);
 const allowDerived = argv.includes("--allow-derived");
+const derivedEntries = [];
 
 // Measured geometry, keyed by component -> array of rows carrying the axis
 // values plus the measured values. Optional; when present, every "measured"
@@ -328,9 +329,9 @@ for (const item of lib.libraryItems ?? []) {
     errors.push(`${name}: container must declare customData.source ("measured" | "composite" | "typography" | "derived") — provenance is what stops derived entries from passing as measured ones`);
   }
   if (source === "derived") {
-    const msg = `${name}: source "derived" — geometry inferred from Tailwind classes, not rendered`;
-    if (allowDerived) warns.push(`${msg}; the library is provisional until it is re-measured`);
-    else errors.push(`${msg}. Fix the render harness and measure, or re-run with --allow-derived to accept a provisional library for prototyping only — it must not feed codegen`);
+    // Collapsed into one line at the end. A derived library has one of these
+    // per entry — 150 identical warnings bury the ones worth reading.
+    derivedEntries.push(name);
   }
   // "composite" means assembled from measured parts. Without naming those
   // parts it is an unfalsifiable claim, and became the escape hatch a pilot
@@ -434,6 +435,20 @@ if (typography) {
 }
 
 // ---------------------------------------------------------------- report
+
+if (derivedEntries.length) {
+  const msg =
+    `${derivedEntries.length} of ${lib.libraryItems?.length ?? 0} entries declare source "derived" — ` +
+    `geometry inferred from Tailwind classes, not rendered`;
+  if (allowDerived) {
+    warns.push(`${msg}. Expected for a lite-librarian build: heights and colours are exact, widths are estimates, and every scene composed from it is provisional`);
+  } else {
+    errors.push(
+      `${msg}. Fix the render harness and measure, or re-run with --allow-derived to accept a provisional ` +
+        `library for prototyping only — it must not feed codegen. First few: ${derivedEntries.slice(0, 5).join(", ")}`
+    );
+  }
+}
 
 for (const w of warns) console.log(`WARN:  ${w}`);
 for (const e of errors) console.log(`ERROR: ${e}`);
