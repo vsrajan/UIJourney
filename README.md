@@ -243,6 +243,27 @@ is right. **Merge and pull before agent 3.**
 
 ---
 
+## Before setup agent 3: embed the logo (one command, not an agent)
+
+```
+node scripts/embed-logo.mjs <sanctioned-logo-url-from-docs/uds-standards.md>
+```
+
+Writes `lib/logo.json` — the brand mark as a base64 data URL. **Commit it,
+and run it before the librarian**, which embeds the asset into the AppHeader
+composite at build time.
+
+Why embedded rather than linked: Excalidraw renders images only from a
+scene's own `files` map and never fetches a remote `src`, so a URL-only logo
+appears as an empty grey box. The sanctioned URL is still recorded and is
+what generated code emits — the embedded copy exists so reviewers can see the
+mark in the mockup.
+
+Run it from inside the firm network. If the asset host is awkward to reach,
+download the PNG in a browser and pass its local path instead (then set
+`src` in the file to the sanctioned URL before committing). Re-run only when
+the brand mark changes.
+
 ## Setup agent 3: `excalidraw-librarian`
 
 **What it does:** renders every component variant in a real browser on your

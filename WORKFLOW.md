@@ -46,11 +46,19 @@ where the repo is hosted.
 |---|-------|----------|----------|------|
 | 1 | `standards-curator` | raw UDS standards markdown (committed file or pasted), kit CSS | `docs/uds-standards.md`, `docs/token-source.md`, `docs/component-notes.json` | MR review: verify no rule lost in cleanup |
 | 2 | `design-data-extractor` | `docs/token-source.md`, `src/components/ui/*.tsx` | `scripts/extract-*.mjs`, `data/tokens.json`, `data/component-manifest.json`, `data/extraction-report.md`, GitLab CI freshness job | MR review: check extraction report coverage + standards diff |
+| 2a | **(manual, not an agent)** `node scripts/embed-logo.mjs <sanctioned-logo-url>` | the logo URL from `docs/uds-standards.md` | `lib/logo.json` | commit it; check the reported dimensions match the real mark |
 | 3 | `excalidraw-librarian` | `data/*.json`, Storybook or a render harness | `data/measurements.json`, `lib/uds.excalidrawlib`, `lib/index.json`, `lib/CATALOG.md` | MR review: spot-check library shapes in Excalidraw |
 | 4 | `guardrails-engineer` | `data/tokens.json`, `docs/uds-standards.md` | UDS lint rules, `uijourney-compliance` job in `.gitlab-ci.yml`, `docs/compliance.md` | MR review + maintainer enables **Settings → Merge requests → "Pipelines must succeed"** |
 
 Merge each MR before launching the next agent — the CI freshness checks
 depend on the previous phase's files being on the default branch.
+
+**Step 2a must precede step 3.** The librarian embeds the logo into the
+AppHeader composite at build time, so `lib/logo.json` has to exist first.
+Excalidraw renders images only from a scene's `files` map and never fetches
+a remote `src`, which is why the asset is committed as a base64 data URL
+rather than referenced. Run it from inside the firm network, or download the
+PNG and pass its local path. Re-run it only when the brand mark changes.
 
 **Re-runs:** the CI job from phase 2/3 fails whenever `src/components/ui/**`
 or the token CSS changes without regenerated `data/` + `lib/` files. When it
