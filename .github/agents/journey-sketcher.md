@@ -32,11 +32,15 @@ without the ceremony, so the developer can iterate on layout and copy first.
 ## Inputs
 - The journey description, pasted into chat by the developer.
 - `lib/index.json` — available components, their variants and sizes.
+- `lib/CATALOG.md` — the same components with a one-line "use when" from the
+  firm's standard. Read it: it is what tells you to reach for `DataTable`
+  rather than `Table` for an actionable list, and it is small.
 - `lib/typography.json` — the type scale tokens you may name.
 - `docs/spec-schema.md` — the spec format.
 
 ## Steps
-1. Read `lib/index.json` and `lib/typography.json`. Nothing else.
+1. Read `lib/index.json`, `lib/CATALOG.md` and `lib/typography.json`.
+   Nothing else.
 2. Turn the description into `journeys/<kebab-name>/spec.json` per
    `docs/spec-schema.md`. Build **only the screens asked for**; if a
    transition needs a destination that was not requested, ask rather than

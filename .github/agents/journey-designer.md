@@ -31,7 +31,8 @@ validation cycles; the same screen composed from a spec passes first time.
 ## Inputs (verify before anything else)
 - The journey description, or an existing `journeys/<name>/spec.json` from
   `journey-sketcher` — prefer the spec when one exists.
-- `lib/index.json`, `lib/typography.json`, `docs/spec-schema.md`.
+- `lib/index.json`, `lib/CATALOG.md`, `lib/typography.json`,
+  `docs/spec-schema.md`.
 - `lib/uds.excalidrawlib` must exist (the composer and validator read it —
   you do not).
 

@@ -44,9 +44,9 @@ where the repo is hosted.
 
 | # | Agent | Consumes | Produces | Gate |
 |---|-------|----------|----------|------|
-| 1 | `standards-curator` | raw UDS standards markdown (committed file or pasted), kit CSS | `docs/uds-standards.md`, `docs/token-source.md` | MR review: verify no rule lost in cleanup |
+| 1 | `standards-curator` | raw UDS standards markdown (committed file or pasted), kit CSS | `docs/uds-standards.md`, `docs/token-source.md`, `docs/component-notes.json` | MR review: verify no rule lost in cleanup |
 | 2 | `design-data-extractor` | `docs/token-source.md`, `src/components/ui/*.tsx` | `scripts/extract-*.mjs`, `data/tokens.json`, `data/component-manifest.json`, `data/extraction-report.md`, GitLab CI freshness job | MR review: check extraction report coverage + standards diff |
-| 3 | `excalidraw-librarian` | `data/*.json`, Storybook or a render harness | `data/variant-styles.json`, `lib/uds.excalidrawlib`, `lib/README.md` | MR review: spot-check library shapes in Excalidraw |
+| 3 | `excalidraw-librarian` | `data/*.json`, Storybook or a render harness | `data/measurements.json`, `lib/uds.excalidrawlib`, `lib/index.json`, `lib/CATALOG.md` | MR review: spot-check library shapes in Excalidraw |
 | 4 | `guardrails-engineer` | `data/tokens.json`, `docs/uds-standards.md` | UDS lint rules, `uijourney-compliance` job in `.gitlab-ci.yml`, `docs/compliance.md` | MR review + maintainer enables **Settings → Merge requests → "Pipelines must succeed"** |
 
 Merge each MR before launching the next agent — the CI freshness checks

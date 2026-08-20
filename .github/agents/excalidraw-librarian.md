@@ -235,6 +235,23 @@ with bucket `overlay`.
    composite `contains`, and the semantic tokens it consumes. Omit
    geometry detail, element arrays and anything base64. Regenerate it in the
    same script run as the library so the two cannot drift.
+
+3b. **Then build the human-readable catalogue:**
+   ```
+   node scripts/build-catalog.mjs
+   ```
+   It joins `lib/index.json` with `docs/component-notes.json` (the "use
+   when" guidance from the standard) and `lib/skips.json`, producing
+   `lib/CATALOG.md`. Developers skim that; agents keep reading the index.
+   Deferred components appear in it too, with their reason — a developer
+   hunting for a date picker should find "deferred: needs the open-state
+   harness" rather than silence, because silence reads as an oversight and
+   invites a hand-rolled substitute.
+
+   The script reports any component with no note. Those are gaps in
+   `docs/component-notes.json`, owned by `standards-curator` — list them in
+   the MR description rather than writing the guidance yourself. The text
+   belongs to the firm's standard, not to the library build.
 4. **Run `node scripts/validate-lib.mjs lib/uds.excalidrawlib` and fix
    every ERROR before delivering.** Explain remaining WARNs in the MR
    description. Never edit the validator to make it pass.

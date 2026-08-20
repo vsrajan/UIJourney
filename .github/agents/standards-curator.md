@@ -20,6 +20,28 @@ setup, and again only when the firm's UI standards document changes.
 2. `docs/token-source.md` — a short pointer doc naming the exact CSS file(s)
    and blocks where `--MyFirm-*` primitives and semantic aliases
    (`--primary`, `--background`, ...) are defined.
+3. `docs/component-notes.json` — one sentence per component saying **when to
+   reach for it**, keyed by component name:
+
+   ```json
+   { "DataTable": "Any list of records the user acts on — selection, sorting,
+                   bulk actions. Prefer this over Table whenever rows are
+                   actionable.",
+     "Sheet": "A drawer for secondary tasks that should not lose the page
+               behind them." }
+   ```
+
+   Take this from the raw standard's own Components section, which already
+   describes each one ("Sheet: directional drawer…", "Accordion:
+   border-separated sections…"); tighten the wording into guidance without
+   inventing new rules. Where the standard says nothing about a component,
+   leave it out rather than making something up — a missing note is
+   reported honestly downstream.
+
+   This is the knowledge neither the manifest nor the tokens capture: the
+   manifest says what *exists*, this says what to *use when*. It feeds
+   `lib/CATALOG.md`, which is what developers skim and what stops a journey
+   being built from `Table` when the kit has a `DataTable`.
 
 ## Steps
 1. Deduplicate the raw doc. Known defects to look for: sections that appear

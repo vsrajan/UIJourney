@@ -132,7 +132,8 @@ the GitLab UI.
    - `.github/agents/` (all seven files)
    - `scripts/` (all of it — the mechanical quality gates and generators:
      `validate-lib.mjs`, `validate-scene.mjs`, `diff-manifest.mjs`,
-     `embed-logo.mjs`, `compose-scene.mjs`, `render-scene.mjs`. Plain Node,
+     `embed-logo.mjs`, `compose-scene.mjs`, `render-scene.mjs`,
+     `build-catalog.mjs`. Plain Node,
      no dependencies except Playwright, which only the PNG preview needs)
    - `docs/spec-schema.md` (the screen-spec format the agents write)
    - `lib/typography.json` (the UDS type scale — **verify its values against
@@ -140,6 +141,11 @@ the GitLab UI.
      from prose, not extracted from CSS) and `lib/skips.json` (the declared
      coverage-gap log; edit as your library grows)
    - `WORKFLOW.md` and this `README.md`
+
+   These are **generated into the firm repo by the setup agents**, not
+   copied from here: `data/*.json`, `lib/uds.excalidrawlib`,
+   `lib/index.json`, `lib/CATALOG.md` (the component list developers skim),
+   `docs/component-notes.json`, `lib/logo.json`.
 
    Yes, the directory is named `.github/` even though the repo lives on
    GitLab — that's where the VS Code Copilot extension looks for its
