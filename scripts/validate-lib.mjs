@@ -34,6 +34,8 @@ if (!libPath) {
 const errors = [];
 const warns = [];
 
+// Relative paths here resolve from the caller's directory, and every command
+// in the docs assumes the repo root. Say so rather than leaving a bare ENOENT.
 function readJson(p, label) {
   try {
     // JSON.parse also catches the classic unquoted-URL bug ("source": https://...)

@@ -125,6 +125,30 @@ the GitLab UI.
   (`npx playwright install chromium`); if the download is blocked by the
   firm proxy, ask your platform team how browser binaries are provisioned.
 
+## Where you run things
+
+There is **one repo**: your kit repo, with the UIJourney files copied in
+alongside your source. After installation its root looks like this, and every
+command in this document is run from that root:
+
+```
+<your kit repo>/
+  .github/agents/      the seven agent definitions
+  scripts/             composer, validators, doctor, generators
+  src/components/ui/   your components — the kit
+  data/  lib/  docs/   generated inputs and artifacts
+  journeys/<name>/     spec.json + journey.excalidraw, per journey
+```
+
+`node scripts/doctor.mjs` anchors to its own location, so it works from
+anywhere. The composer and validators take **paths relative to your current
+directory**, so `node scripts/compose-scene.mjs journeys/login/spec.json`
+means what you expect only from the root. Run everything from the root and
+the distinction never matters.
+
+The UIJourney template is a **separate clone** you copy files *from*; nothing
+runs there.
+
 ## One-time installation in the firm repo
 
 1. Copy from this template into the firm's kit repo, keeping paths exactly:

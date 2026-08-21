@@ -36,6 +36,8 @@ function parse(p, required = true) {
   if (!existsSync(p)) {
     if (required) {
       console.error(`ERROR: ${p} not found`);
+      if (!p.startsWith("/")) console.error(`(relative paths resolve from your current directory — run this from the repo root)`);
+
       process.exit(1);
     }
     return null;
