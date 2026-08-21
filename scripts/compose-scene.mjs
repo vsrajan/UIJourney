@@ -27,6 +27,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildIndex, lookupEntry, unmatchedAxes } from "./lib-index.mjs";
+import { isScaffoldText, PLACEHOLDER_HOSTS } from "./placeholder-text.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const argv = process.argv.slice(2);
@@ -274,41 +275,10 @@ function typographyEl({ component, typography: token, text, x, y, frameId, width
 
 
 
-// ------------------------------------------------- glyph placeholder copy
-
-// A library glyph carries scaffolding text so it reads as itself in the
-// library browser -- Card ships with "Card Title" / "Card Description" /
-// "Card content goes here", Checkbox with "Label". Cloned into a scene with
-// nothing to replace it, that scaffolding reads as real screen copy.
-//
-// It is not all droppable. An Input's placeholder IS the affordance; a
-// Card's title is scaffolding standing in for copy the spec should supply.
-// The line is drawn by what the component is for, not by the words.
-const PLACEHOLDER_HOSTS = new Set(["Input", "Textarea", "Select", "Combobox", "SearchInput", "DatePicker"]);
-
-const SCAFFOLD_PHRASES = new Set([
-  "label", "placeholder", "title", "description", "text", "content", "value", "item",
-  "heading", "subtitle", "caption", "content goes here", "lorem ipsum",
-  "your text here", "example", "sample text",
-]);
-
-const normalizeText = (t) => String(t ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-
-// True when a glyph's own text is standing in for copy the spec should have
-// supplied: a generic phrase, or a phrase built from the component's name.
-function isScaffoldText(text, component, rootComponent) {
-  const raw = String(text ?? "").trim();
-  if (!raw) return true;
-  if (SCAFFOLD_PHRASES.has(raw.toLowerCase())) return true;
-  const n = normalizeText(raw);
-  for (const c of [component, rootComponent]) {
-    const cn = normalizeText(c);
-    if (!cn) continue;
-    // "Card" -> "Card", "Card Title", "Card content goes here"
-    if (n === cn || (n.startsWith(cn) && n.length <= cn.length + 24)) return true;
-  }
-  return false;
-}
+// Glyph placeholder copy: library glyphs carry stand-in text so they read as
+// themselves when browsed. The rules for telling that apart from real content
+// live in placeholder-text.mjs, which carries its own self-test
+// (node scripts/placeholder-text.mjs --selftest).
 
 // ------------------------------------------------------- table synthesis
 
