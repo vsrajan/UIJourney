@@ -88,13 +88,15 @@ Specifically, these are NOT relaxed for you:
 1. Verify inputs: `data/tokens.json`, `data/component-manifest.json`,
    `lib/typography.json`, `lib/skips.json`. Confirm `lib/logo.json` exists
    (run `node scripts/embed-logo.mjs <url>` if not).
-2. Confirm you are the right agent for this. Check whether the kit builds:
+2. Confirm you are the right agent for this:
    ```
-   node -e "require.resolve('react')" && node -e "require.resolve('vite')"
+   node scripts/doctor.mjs
    ```
-   **If both resolve, stop and tell the developer to run
+   **If it exits zero, stop and tell the developer to run
    `excalidraw-librarian` instead** — measured beats derived every time, and
-   the only reason to be here is that measurement is impossible.
+   the only reason to be here is that measurement is impossible. If it fails,
+   paste its output into your MR description: it is the record of why this
+   library is derived.
 3. Write `scripts/build-library-lite.mjs`: iterate the manifest, read each
    component's `cva` class strings from source, obtain geometry via
    `tailwind-metrics.mjs`, and emit glyphs per the anatomy contract. Keep it

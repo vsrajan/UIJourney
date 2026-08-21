@@ -135,7 +135,9 @@ the GitLab UI.
      `embed-logo.mjs`, `compose-scene.mjs`, `render-scene.mjs`,
      `build-catalog.mjs`, `ensure-parser.mjs`, `validate-manifest.mjs`,
      `tailwind-metrics.mjs`, `lib-index.mjs`, `placeholder-text.mjs`
-     (self-testing: `node scripts/placeholder-text.mjs --selftest`).
+     (self-testing: `node scripts/placeholder-text.mjs --selftest`),
+     `doctor.mjs` (checks this machine can render the kit before a
+     librarian run).
      Plain Node, no dependencies
      except Playwright, which only the PNG preview needs, and `ts-morph`,
      which `ensure-parser.mjs` installs for the extractor into a gitignored

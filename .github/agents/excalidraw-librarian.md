@@ -30,9 +30,14 @@ convention. Read the coverage and typography sections carefully.
   otherwise create `scripts/render-harness/` — a minimal Vite page that
   renders one component variant per route with the real global CSS loaded.
 
-  **If the kit does not build, stop.** No `node_modules`, a failing
-  `pnpm install`, no React or Vite — none of that is a puzzle to route
-  around, it is a blocked run. Report what failed (a pilot run was blocked
+  **Check first, with `node scripts/doctor.mjs`.** It verifies node_modules,
+  React, a render harness, every package the kit's own components import, a
+  resolvable Playwright and a Chromium binary — in about ten seconds. Do not
+  begin measuring until it exits zero.
+
+  **If it does not, stop.** No `node_modules`, a failing `pnpm install`, a
+  private package the registry will not serve — none of that is a puzzle to
+  route around, it is a blocked run. Report what failed (a pilot run was blocked
   by `@uwr/icons` missing from the corporate registry) and say plainly that
   the librarian needs an environment where the kit builds: a machine whose
   `node_modules` is already installed, or CI. The parser sandbox in
