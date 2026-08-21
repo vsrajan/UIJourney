@@ -111,7 +111,7 @@ function resolvesAnywhere(spec) {
   try { require.resolve(spec, { paths: [REPO, join(REPO, "node_modules"), sandbox] }); return true; }
   catch { return false; }
 }
-const pw = resolvesAnywhere("playwright") || resolvesAnywhere("playwright-core");
+const pw = ["@playwright/test", "playwright", "playwright-core"].some(resolvesAnywhere);
 add(pw, "playwright available", "", "npm install playwright-core --prefix .uijourney-tools");
 
 // Ask Playwright where its browser is rather than guessing paths. It is the
@@ -127,16 +127,21 @@ let needsExecutablePath = true;
 if (process.env.UIJOURNEY_CHROMIUM && existsSync(process.env.UIJOURNEY_CHROMIUM)) {
   browser = process.env.UIJOURNEY_CHROMIUM;
   how = "UIJOURNEY_CHROMIUM";
-} else if (pw) {
-  for (const mod of ["playwright", "playwright-core"]) {
+} else {
+  for (const mod of ["@playwright/test", "playwright", "playwright-core"]) {
     try {
       const entry = require.resolve(mod, { paths: [REPO, join(REPO, "node_modules"), sandbox] });
-      const { chromium } = await import(pathToFileURL(entry).href);
+      const ns = await import(pathToFileURL(entry).href);
+      // These packages are CommonJS and expose `chromium` through a getter,
+      // which cjs-module-lexer cannot see — so the named import is undefined
+      // and only the default holds the real object. Reading just `ns.chromium`
+      // silently yielded nothing and sent this check off guessing at paths.
+      const chromium = ns.chromium ?? ns.default?.chromium ?? ns.default?.default?.chromium;
       const p = chromium?.executablePath?.();
-      // playwright-core computes a path without checking it exists.
+      // playwright-core computes a path without checking the file is there.
       if (p && existsSync(p)) {
         browser = p;
-        how = `${mod} bundled browser`;
+        how = `${mod} reports it`;
         needsExecutablePath = false;
         break;
       }
@@ -151,6 +156,10 @@ if (!browser) {
     join(homedir(), ".cache", "ms-playwright"),
     join(homedir(), "Library", "Caches", "ms-playwright"),
     join(homedir(), "AppData", "Local", "ms-playwright"),
+    // Repo-local caches: some setups point the download inside the project,
+    // and HOME is not always where the browsers actually landed.
+    join(REPO, ".cache", "ms-playwright"),
+    join(REPO, "node_modules", ".cache", "ms-playwright"),
   ].filter((r) => r && existsSync(r));
   const leaves = [
     ["chrome-linux", "chrome"],
@@ -183,7 +192,11 @@ add(
   Boolean(browser),
   "chromium executable",
   browser ? `${browser}  [${how}]` : "",
-  "install Chromium, or set UIJOURNEY_CHROMIUM to its path — do not run `npx playwright install`, that download is often blocked"
+  pw
+    ? "Playwright is installed but no browser was found. Print the path it expects with\n" +
+      "       node -e \"console.log(require('@playwright/test').chromium.executablePath())\"\n" +
+      "       then set UIJOURNEY_CHROMIUM to it. Do not run `npx playwright install` blindly."
+    : "install Chromium, or set UIJOURNEY_CHROMIUM to its path — do not run `npx playwright install`, that download is often blocked"
 );
 
 // ---------------------------------------------------------------- report
