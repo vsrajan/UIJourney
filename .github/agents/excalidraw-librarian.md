@@ -35,6 +35,13 @@ convention. Read the coverage and typography sections carefully.
   resolvable Playwright and a Chromium binary — in about ten seconds. Do not
   begin measuring until it exits zero.
 
+  **Launch the browser exactly as the doctor's last lines say.** When
+  Playwright resolves its own bundled browser, call `chromium.launch()` with
+  no `executablePath`; only pass one when the doctor prints a path, and then
+  use that path verbatim. Never run `npx playwright install` — if a browser
+  were missing the doctor would have failed, and that download is usually
+  blocked on a corporate network.
+
   **If it does not, stop.** No `node_modules`, a failing `pnpm install`, a
   private package the registry will not serve — none of that is a puzzle to
   route around, it is a blocked run. Report what failed (a pilot run was blocked
