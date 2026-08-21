@@ -262,6 +262,20 @@ real table synthesis from `columns`/`rows`/`selectable`/`rowActions`.
 worse than one that rejects them — the agent writes something reasonable, the
 developer reads it back as confirmation, and only the picture disagrees.*
 
+**A fix made in the firm repo was overwritten by the next template copy.**
+The designer was asked to remove Card placeholder copy ("Card Title", "Card
+content goes here") and did it by editing `compose-scene.mjs` locally. Days
+later a template update to that same file reverted it and the placeholders
+came back. Two fixes: the composer now drops glyph scaffolding generically —
+text that is a stand-in phrase or built from the component's own name, unless
+the spec supplied copy, and never on input-like components where the
+placeholder is the affordance — and it prints what it dropped. And the
+designer contract forbids editing `scripts/` at all, on the same footing as
+`lib/`: a composer defect is a report, not a local patch. *Lesson: the agents
+run inside the firm repo but most of what they run is template-owned, so any
+local edit to shared tooling is a fix with an expiry date. Anything that
+should stay fixed has to go upstream.*
+
 ---
 
 ## 6. What exists now

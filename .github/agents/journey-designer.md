@@ -26,6 +26,12 @@ validation cycles; the same screen composed from a spec passes first time.
 - **Never write to `lib/`.** The library is the librarian's artifact and the
   authority you are checked against. A run that adds its own entries to get
   past validation destroys that. Missing component → stop and report.
+- **Never edit anything in `scripts/`.** The composer and validators are
+  shared, versioned tooling copied in from the UIJourney template, so a local
+  patch is silently reverted the next time they are updated and the bug
+  reappears — this has already happened once, with Card placeholder text that
+  came back days later. A composer defect is a report, with the journey, the
+  spec node and what you expected, so it can be fixed once for everyone.
 - Do not invent screens. A request for "a login screen" means one screen.
 
 ## Inputs (verify before anything else)
@@ -60,7 +66,8 @@ validation cycles; the same screen composed from a spec passes first time.
    ```
    Fix every ERROR by changing the **spec**, never by editing the scene by
    hand. If an error cannot be fixed from the spec, that is a composer or
-   library defect — report it rather than patching the output.
+   library defect — report it rather than patching the output, and never by
+   editing `scripts/` or `lib/` yourself.
 3. Optionally `node scripts/render-scene.mjs journeys/<name>/journey.excalidraw`
    and attach the PNG for reviewers.
 4. Deliver per `.github/copilot-instructions.md` — branch

@@ -61,7 +61,7 @@ Screens are placed left to right in `step` order. Each gets a
 |---|---|
 | `component` | Library component name, e.g. `Button`, `Input`, `Card` |
 | `variant` | Library variant, default `"default"` |
-| `text` | Label/content. For a bound-label component this replaces the label. **`""` removes it** — a glyph ships with placeholder copy ("Label", "Placeholder"), and an empty string is how you say this instance has none |
+| `text` | Label/content. For a bound-label component this replaces the label. **`""` removes it** — an empty string is how you say this instance has none |
 | `typography` | For `Heading` / `Text` / `Link`: a token from `lib/typography.json` |
 | `props` | Concrete props. String values that name a variant axis (`size`, `tone`) select the library entry; `title`/`label`/`placeholder` supply visible copy; table data is rendered (below). Everything else is recorded in `customData.props` for codegen |
 | `width` | Override width. Only honoured where the library entry allows resizing |
@@ -77,6 +77,23 @@ Two sugars:
   Heading/Text/Link. Give a node an explicit `width` to override, and any node
   whose natural width is unknown shares the leftover space. If the row is
   wider than the content column it falls back to an even split.
+
+## Glyph placeholder copy
+
+Library glyphs carry stand-in text so they read as themselves when browsed —
+`Card` ships with "Card Title", "Card Description", "Card content goes here";
+`Checkbox` with "Label". The composer drops that scaffolding when the spec
+does not replace it, so it never reads as real screen copy, and prints what
+it dropped.
+
+Two things are deliberately kept. Placeholder text on an **input-like**
+component (Input, Textarea, Select, Combobox, DatePicker) is the affordance
+itself, so it survives unless `props.placeholder` replaces it. And anything
+the spec supplies always wins — these rules only ever apply to text the spec
+said nothing about.
+
+If a dropped line should have been real copy, put it in the spec: `text` on
+the node, or a child node of its own.
 
 ## Nothing outside the spec survives
 

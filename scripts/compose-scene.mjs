@@ -130,7 +130,7 @@ const stamp = (el) => ({ ...BASE, ...el, seed: hash(el.id) % 2147483647, version
 // The original rule only grew children within 2px of the anchor's width,
 // which left a widened DataTable with a 1000px panel and 560px rows — the
 // ragged edge you see when a glyph is stretched but its innards are not.
-function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
+function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasChildren = false }) {
   const { item, anchor } = entry;
   const dx = x - anchor.x;
   const dy = y - anchor.y;
@@ -146,6 +146,7 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
     const isAnchor = el.id === anchor.id;
     const spans = (el.width ?? 0) >= anchor.width * 0.5;
     const inRightHalf = (el.x ?? 0) - anchor.x > anchor.width * 0.5;
+    let wasOverridden = false;
     const clone = {
       ...JSON.parse(JSON.stringify(el)),
       id: idMap.get(el.id),
@@ -171,13 +172,14 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
     if (el.type === "text") {
       let t = texts[comp];
       if (t === undefined && el.containerId) t = texts.__label;
+      // fallthrough rules below; `wasOverridden` records whether the spec spoke
       if (t === undefined && rootComponent && typeof comp === "string" && comp !== rootComponent && comp.startsWith(rootComponent)) {
         t = texts.__label;
       }
       // A composite with exactly one free text has only one thing that text
       // can be. With two, guessing would clobber a subtitle, so don't.
       if (t === undefined && !el.containerId && freeTextCount === 1) t = texts.__label;
-      if (t != null) { clone.text = t; clone.originalText = t; clone.width = textWidth(t, el.fontSize); }
+      if (t != null) { clone.text = t; clone.originalText = t; clone.width = textWidth(t, el.fontSize); wasOverridden = true; }
     }
     // An explicit "" means "this component has no label here" — drop the
     // element rather than leaving an empty box. Without a way to say that,
@@ -186,6 +188,21 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
     if (clone.type === "text" && clone.text === "") {
       dropped.add(clone.id);
       continue;
+    }
+
+    // Un-overridden glyph scaffolding. Only reached when the spec said
+    // nothing about this text, so a real label always wins over these rules.
+    if (clone.type === "text" && !wasOverridden) {
+      const host = el.customData?.component ?? rootComponent;
+      const isAffordance = PLACEHOLDER_HOSTS.has(host) || PLACEHOLDER_HOSTS.has(rootComponent);
+      // A container given children has real content; its own stand-in copy
+      // is what the children replace.
+      const supersededByChildren = hasChildren;
+      if (!isAffordance && (supersededByChildren || isScaffoldText(clone.text, host, rootComponent))) {
+        placeholdersDropped.push(`${rootComponent ?? host}: "${String(clone.text).slice(0, 40)}"`);
+        dropped.add(clone.id);
+        continue;
+      }
     }
     if (isAnchor && Object.keys(props).length) {
       clone.customData = { ...clone.customData, props: { ...(clone.customData?.props ?? {}), ...props } };
@@ -222,6 +239,7 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {} }) {
   return out;
 }
 
+const placeholdersDropped = [];
 const textWidth = (t, size) => Math.ceil(String(t).length * size * 0.6);
 // The box a run of text actually occupies, one line-height per line.
 const textHeight = (t, size = 16, lineHeight = 1.25) =>
@@ -254,6 +272,43 @@ function typographyEl({ component, typography: token, text, x, y, frameId, width
   });
 }
 
+
+
+// ------------------------------------------------- glyph placeholder copy
+
+// A library glyph carries scaffolding text so it reads as itself in the
+// library browser -- Card ships with "Card Title" / "Card Description" /
+// "Card content goes here", Checkbox with "Label". Cloned into a scene with
+// nothing to replace it, that scaffolding reads as real screen copy.
+//
+// It is not all droppable. An Input's placeholder IS the affordance; a
+// Card's title is scaffolding standing in for copy the spec should supply.
+// The line is drawn by what the component is for, not by the words.
+const PLACEHOLDER_HOSTS = new Set(["Input", "Textarea", "Select", "Combobox", "SearchInput", "DatePicker"]);
+
+const SCAFFOLD_PHRASES = new Set([
+  "label", "placeholder", "title", "description", "text", "content", "value", "item",
+  "heading", "subtitle", "caption", "content goes here", "lorem ipsum",
+  "your text here", "example", "sample text",
+]);
+
+const normalizeText = (t) => String(t ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// True when a glyph's own text is standing in for copy the spec should have
+// supplied: a generic phrase, or a phrase built from the component's name.
+function isScaffoldText(text, component, rootComponent) {
+  const raw = String(text ?? "").trim();
+  if (!raw) return true;
+  if (SCAFFOLD_PHRASES.has(raw.toLowerCase())) return true;
+  const n = normalizeText(raw);
+  for (const c of [component, rootComponent]) {
+    const cn = normalizeText(c);
+    if (!cn) continue;
+    // "Card" -> "Card", "Card Title", "Card content goes here"
+    if (n === cn || (n.startsWith(cn) && n.length <= cn.length + 24)) return true;
+  }
+  return false;
+}
 
 // ------------------------------------------------------- table synthesis
 
@@ -477,6 +532,7 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
         x, y: isHeader ? 0 : y, width, frameId: fid,
         texts: { __label: label, [comp]: label },
         props: node.props ?? {},
+        hasChildren: Boolean(node.children?.length),
       });
       elements.push(...created);
 
@@ -612,6 +668,11 @@ writeFileSync(outPath, JSON.stringify(scene, null, 2));
 console.log(`wrote ${outPath}`);
 console.log(`  ${frameIds.length} screen(s), ${elements.length} element(s), ${Object.keys(files).length} embedded file(s)`);
 if (!logo) console.log("  WARN: no lib/logo.json — the logo will not render; run scripts/embed-logo.mjs");
+if (placeholdersDropped.length) {
+  const shown = [...new Set(placeholdersDropped)];
+  console.log(`  dropped ${placeholdersDropped.length} glyph placeholder(s): ${shown.slice(0, 6).join(", ")}${shown.length > 6 ? ", ..." : ""}`);
+  console.log("  If any of those should be real screen copy, put it in the spec as `text` or a child node.");
+}
 if (derivedUsed.size) {
   console.log(`  PROVISIONAL: ${derivedUsed.size} component(s) came from derived library entries (${[...derivedUsed].sort().join(", ")}).`);
   console.log("  Widths are estimates. Fine for mockups; validate with --allow-derived, and journey-coder will refuse this scene.");
