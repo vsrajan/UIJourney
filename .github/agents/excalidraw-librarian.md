@@ -210,6 +210,40 @@ render harness's defaults to leak in — which is exactly how run 2 produced
   confirming the mark renders**; if the library format drops the file data,
   say so in the MR — scenes still render correctly because the designer
   agent copies the entry from `lib/logo.json` into each scene's `files`.
+- **Icons are DRAWN, never embedded.** The Logo is the only image in this
+  system. Draw an icon from Excalidraw primitives — a chevron is a two-segment
+  `line`, a check is a polyline, a search glyph is an `ellipse` plus a short
+  line, a menu is three lines — at the size the component actually reserves
+  (typically 16px, `strokeWidth: 2`), coloured from the same token as the
+  component's foreground.
+
+  Three reasons this is not the logo's problem. A kit has hundreds of icons
+  and embedding them would mean a base64 blob per icon per colour, since a
+  white icon on a red Button and a dark one on a ghost Button are different
+  images. Drawn icons inherit their colour from the token, so one glyph
+  serves every variant. And an embedded icon is a fixed raster in a document
+  whose whole point is that it stays editable.
+
+  **Always stamp `customData.props.icon` with the real icon name** from the
+  kit (`"ChevronDown"`, `"Search"`), whether you drew it or not — that name
+  is what codegen imports, and it is the only part of an icon that must be
+  exact.
+
+  For an icon whose shape you cannot draw convincingly, emit a 16x16 rounded
+  square at the `--muted-foreground` token with the name in
+  `props.icon`. A named placeholder reserves the right space and tells
+  codegen the truth; an omitted icon silently changes the component's width.
+
+- **Avatar** is the **fallback state**: a circle at the measured size with
+  two initials centred in it, exactly what `AvatarFallback` renders before an
+  image loads. Never an `image` element. A real user photo is data, not
+  design — a mockup that shows one is asserting something about a specific
+  person, and every instance would need its own embedded blob.
+
+  The rule generally: **embed an image only for something singular,
+  brand-exact and identical in every instance.** The logo is the only thing
+  in a kit that qualifies.
+
 - **Overlays** (Dialog, AlertDialog, Sheet, DropdownMenu, Popover,
   Select content, Combobox): the glyph is the **content panel** — rounded
   rect, title, body, footer button row — optionally over a dimmed scrim

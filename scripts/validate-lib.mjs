@@ -325,6 +325,20 @@ for (const item of lib.libraryItems ?? []) {
     }
   }
 
+  // ------- images are for the logo alone
+  // A kit has hundreds of icons; embedding them means a base64 blob per icon
+  // per colour, and a fixed raster inside a document whose point is that it
+  // stays editable. Drawn icons inherit their colour from the token instead.
+  for (const el of els) {
+    if (el.type !== "image") continue;
+    if (el.customData?.component === "Logo") continue;
+    errors.push(
+      `${name}: ${el.customData?.component ?? "an element"} is an image — only the Logo may be embedded. ` +
+        `Draw icons from primitives and stamp customData.props.icon with the kit's icon name; ` +
+        `draw Avatar as its fallback circle with initials`
+    );
+  }
+
   // ------- provenance
   const source = container?.customData?.source;
   if (component && !SOURCES.has(source)) {
