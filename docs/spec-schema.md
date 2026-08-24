@@ -66,6 +66,7 @@ Screens are placed left to right in `step` order. Each gets a
 | `props` | Concrete props. String values that name a variant axis (`size`, `tone`) select the library entry; `title`/`label`/`placeholder` supply visible copy; table data is rendered (below). Everything else is recorded in `customData.props` for codegen |
 | `width` | Override width. Only honoured where the library entry allows resizing |
 | `gap` | Space below this node, default 16 |
+| `underline` | Draws a 2px rule beneath the node — the active-nav-item and selected-tab affordance. `true` uses `--primary`; a token or hex overrides it |
 | `children` | Nodes nested inside a container such as `Card` |
 
 Two sugars:
@@ -192,7 +193,8 @@ library glyph:
 | `columns` | Header labels, left to right. An empty first entry means the checkbox gutter; a trailing `"Actions"` is implied by `rowActions` |
 | `rows` | Objects keyed loosely by column name (`"Short Description"` matches `short`), or plain arrays in column order |
 | `selectable` | Adds a real `Checkbox` from the library to every row |
-| `scrollbar` | Draws a scrollbar rail down the table's right edge — the wireframe convention for "this list continues". Also accepted as `scroll: "vertical"` (or `"both"`, `"auto"`, `true`), at node level or in `props` |
+| `scroll` | `"vertical"` / `"horizontal"` / `"both"` — draws the rails on those axes. Also spelled `scrollbar` or `scrollable`, at node level or in `props`; `true` means vertical |
+| `cellComponents` | Render a column with a real kit component instead of text (below) |
 | `rowActions` | Per-row buttons. Strings pick a sensible variant (Approve→positive, Reject/Delete→negative); use `{ "label": ..., "variant": ... }` to choose |
 
 Columns take the width their content needs; when the total exceeds the table,
@@ -202,6 +204,29 @@ ellipsized rather than drawn over the next column. Colours and band heights come
 from the library glyph; the structure comes from the spec. Table chrome the
 glyph may carry — a search box, pagination — is **not** synthesized: add it to
 the spec as its own node if the screen needs it.
+
+### Colour-coded columns
+
+A status column reads far better as the kit's own Badge than as plain text,
+and the variant carries the semantics through to codegen:
+
+```json
+"cellComponents": {
+  "Status": {
+    "component": "Badge",
+    "variants": { "Running": "positive", "Completed": "secondary",
+                  "Failed": "negative", "Queued": "warning" },
+    "default": "default"
+  }
+}
+```
+
+The value becomes the component's label and the mapped variant selects the
+library entry, so the colours are your kit's, not invented. A value with no
+mapping uses `default`; a variant that does not exist in the library falls
+back to plain text and is reported, rather than guessing at a near match.
+Check `lib/CATALOG.md` for the variants your kit actually has — `positive`
+and `warning` are common, but not universal.
 
 Synthesized elements carry `customData.synthesized: true`, which exempts them
 from library size conformance (their geometry is the composer's, not the

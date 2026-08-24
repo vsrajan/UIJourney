@@ -140,7 +140,7 @@ function libEntryFor(cd) {
 // columns, which only the spec knows).
 const SCENE_ONLY_COMPONENTS = new Set([
   "PageBackground", "TableHeader", "TableRow", "TableCell", "Icon",
-  "ScrollbarTrack", "ScrollbarThumb",
+  "ScrollbarTrack", "ScrollbarThumb", "Underline",
 ]);
 
 // A lone symbol character standing in for an icon. It renders as text, may be

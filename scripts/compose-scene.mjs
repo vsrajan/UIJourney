@@ -244,6 +244,23 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasC
 const placeholdersDropped = [];
 const iconPlaceholders = [];
 const ignoredKeys = [];
+const missingCellComponents = [];
+
+// A 2px rule under an element — the active-nav-item and selected-tab
+// affordance. `underline: true` uses --primary; a token or hex overrides it.
+// There is no way to say this with a component, so it is a node property.
+function underlineFor(node, el, frameId) {
+  const u = node.underline ?? node.props?.underline;
+  if (!u) return [];
+  const color = resolveColor(typeof u === "string" ? u : "--primary", "#E60000");
+  return [stamp({
+    id: nextId("underline"), type: "rectangle",
+    x: el.x, y: el.y + el.height + 4, width: el.width, height: 2,
+    strokeColor: "transparent", backgroundColor: color, strokeWidth: 0,
+    fillStyle: "solid", roughness: 0, roundness: null, frameId,
+    customData: { component: "Underline", props: { color: typeof u === "string" ? u : "--primary" }, synthesized: true },
+  })];
+}
 
 // Keys the composer acts on. Anything else in a layout node is inert, and a
 // spec that silently swallows an inert key is the failure mode that has cost
@@ -252,12 +269,14 @@ const ignoredKeys = [];
 const NODE_KEYS = new Set([
   "component", "variant", "text", "typography", "props", "width", "gap",
   "children", "row", "field", "icon", "size", "color", "center", "scroll",
+  "underline",
   "scrollbar", "scrollable",
 ]);
 // props are free-form metadata for codegen EXCEPT on components the composer
 // builds itself, where they drive what gets drawn.
 const SYNTHESIZED_PROPS = new Set([
   "columns", "rows", "selectable", "rowActions", "scrollbar", "scroll", "scrollable", "icon",
+  "cellComponents", "columnComponents",
 ]);
 function noteUnknownKeys(node, comp) {
   for (const k of Object.keys(node)) {
@@ -349,15 +368,21 @@ function actionSpec(a) {
 
 // Builds a table from the spec's own data, using the library glyph only for
 // its colours and band heights. Returns { elements, height }.
-// "show a vertical scrollbar" is worth saying several ways; a spec that only
-// accepts one spelling and ignores the rest looks like it is working.
-function wantsScrollbar(node) {
+// "show a scrollbar" is worth saying several ways, and the direction has to
+// actually be honoured — accepting "both" and drawing only the vertical rail
+// is the same silent no-op as ignoring the key entirely.
+function scrollAxes(node) {
   const p = node.props ?? {};
-  for (const v of [node.scroll, p.scroll, node.scrollbar, p.scrollbar, p.scrollable, node.scrollable]) {
-    if (v === true) return true;
-    if (typeof v === "string" && /^(vertical|both|y|auto|true|yes)$/i.test(v)) return true;
+  const out = { v: false, h: false };
+  for (const raw of [node.scroll, p.scroll, node.scrollbar, p.scrollbar, node.scrollable, p.scrollable]) {
+    if (raw === true) { out.v = true; continue; }
+    if (typeof raw !== "string") continue;
+    const val = raw.toLowerCase();
+    if (/^(both|xy|auto)$/.test(val)) { out.v = true; out.h = true; }
+    else if (/^(vertical|y|true|yes)$/.test(val)) out.v = true;
+    else if (/^(horizontal|x)$/.test(val)) out.h = true;
   }
-  return false;
+  return out;
 }
 
 function synthesizeTable(entry, node, { x, y, width, frameId }) {
@@ -368,6 +393,15 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
   // A leading empty column header is how specs write the checkbox gutter.
   const selectable = props.selectable === true || rawColumns[0] === "";
   const columns = rawColumns.filter((c) => c !== "" && c.toLowerCase() !== "actions");
+
+  // { "Status": { "component": "Badge", "variants": { "Running": "positive" } } }
+  // Keys are matched loosely so "Status" and "status" both find the entry.
+  const normKey = (t) => String(t ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cellComponents = {};
+  for (const [k, v] of Object.entries(props.cellComponents ?? props.columnComponents ?? {})) {
+    cellComponents[k] = v;
+    cellComponents[normKey(k)] = v;
+  }
 
   const surface = entry.anchor;
   const kids = entry.item.elements.filter((e) => e.id !== surface.id && e.type === "rectangle");
@@ -481,7 +515,27 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
       }));
     }
     columns.forEach((c, i) => {
-      out.push(textEl(cellValue(row, c, i), cellX(i), ry + Math.round((rowH - 16) / 2), colW[i] - 12));
+      const value = cellValue(row, c, i);
+      const spec_ = cellComponents[c] ?? cellComponents[normKey(c)];
+      if (spec_) {
+        // A status column reads far better as the kit's own Badge than as
+        // plain text, and the variant carries the semantics into codegen.
+        const variant = spec_.variants?.[String(value)] ?? spec_.variants?.[String(value).toLowerCase()] ?? spec_.default ?? "default";
+        const cellEntry = lookupEntry(libIndex, spec_.component, { variant, ...(spec_.props ?? {}) });
+        if (cellEntry) {
+          if (cellEntry.source === "derived") derivedUsed.add(spec_.component);
+          const bh = cellEntry.anchor.height ?? 22;
+          const bw = Math.min(colW[i] - 12, Math.max(cellEntry.anchor.width ?? 72, textWidth(String(value), 12) + 20));
+          out.push(...instantiate(cellEntry, {
+            x: cellX(i), y: ry + Math.round((rowH - bh) / 2), width: bw, frameId,
+            texts: { __label: String(value), [spec_.component]: String(value) },
+            props: { variant, ...(spec_.props ?? {}) },
+          }));
+          return;
+        }
+        missingCellComponents.push(`${spec_.component}/${variant}`);
+      }
+      out.push(textEl(value, cellX(i), ry + Math.round((rowH - 16) / 2), colW[i] - 12));
     });
     let ax = x + width - actionsW + 8;
     for (const a of actionEntries) {
@@ -500,24 +554,27 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
   // A scrollbar rail is how a wireframe says "this list continues past the
   // viewport" — the spec asks for it, so draw it rather than leaving the
   // reviewer to infer it from a row count.
-  if (wantsScrollbar(node)) {
-    const railW = 6;
-    const railX = x + width - railW - 4;
-    out.push(stamp({
-      id: nextId("scrollrail"), type: "rectangle", x: railX, y: y + headerH + 4,
-      width: railW, height: Math.max(0, totalH - headerH - 8),
-      strokeColor: "transparent", backgroundColor: border, strokeWidth: 0,
-      fillStyle: "solid", roughness: 0, roundness: { type: 3 }, frameId,
-      customData: { component: "ScrollbarTrack", props: {}, synthesized: true },
-    }));
-    const thumbH = Math.max(24, Math.round((totalH - headerH - 8) * 0.35));
-    out.push(stamp({
-      id: nextId("scrollthumb"), type: "rectangle", x: railX, y: y + headerH + 6,
-      width: railW, height: thumbH,
-      strokeColor: "transparent", backgroundColor: muted, strokeWidth: 0,
-      fillStyle: "solid", roughness: 0, roundness: { type: 3 }, frameId,
-      customData: { component: "ScrollbarThumb", props: {}, synthesized: true },
-    }));
+  const axes = scrollAxes(node);
+  const RAIL = 6;
+  const bar = (id, comp, bx, by, bw, bh, fill) => stamp({
+    id: nextId(id), type: "rectangle", x: bx, y: by, width: bw, height: bh,
+    strokeColor: "transparent", backgroundColor: fill, strokeWidth: 0,
+    fillStyle: "solid", roughness: 0, roundness: { type: 3 }, frameId,
+    customData: { component: comp, props: {}, synthesized: true },
+  });
+  if (axes.v) {
+    const railX = x + width - RAIL - 4;
+    const railY = y + headerH + 4;
+    const railH = Math.max(0, totalH - headerH - 8 - (axes.h ? RAIL + 4 : 0));
+    out.push(bar("scrollrail", "ScrollbarTrack", railX, railY, RAIL, railH, border));
+    out.push(bar("scrollthumb", "ScrollbarThumb", railX, railY + 2, RAIL, Math.max(24, Math.round(railH * 0.35)), muted));
+  }
+  if (axes.h) {
+    const railY = y + totalH - RAIL - 4;
+    const railX = x + 8;
+    const railW2 = Math.max(0, width - 16 - (axes.v ? RAIL + 4 : 0));
+    out.push(bar("scrollrailh", "ScrollbarTrack", railX, railY, railW2, RAIL, border));
+    out.push(bar("scrollthumbh", "ScrollbarThumb", railX + 2, railY, Math.max(32, Math.round(railW2 * 0.45)), RAIL, muted));
   }
 
   return { elements: out, height: totalH };
@@ -591,6 +648,7 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
           text: node.text ?? "", x: originX, y, frameId: fid,
         });
         elements.push(el);
+        elements.push(...underlineFor(node, el, fid));
         y += el.height + (node.gap ?? GAP);
         continue;
       }
@@ -639,6 +697,7 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
       }
 
       const anchorClone = created.find((e) => e.customData?.component === comp);
+      if (anchorClone) elements.push(...underlineFor(node, anchorClone, fid));
       const h = anchorClone?.height ?? 0;
 
       // props.icon on a component draws the icon inside it. The sketcher
@@ -801,6 +860,11 @@ writeFileSync(outPath, JSON.stringify(scene, null, 2));
 console.log(`wrote ${outPath}`);
 console.log(`  ${frameIds.length} screen(s), ${elements.length} element(s), ${Object.keys(files).length} embedded file(s)`);
 if (!logo) console.log("  WARN: no lib/logo.json — the logo will not render; run scripts/embed-logo.mjs");
+if (missingCellComponents.length) {
+  const shown = [...new Set(missingCellComponents)];
+  console.log(`  cell component(s) not in the library, rendered as text: ${shown.join(", ")}`);
+  console.log("  Check lib/CATALOG.md for the variants your kit actually has.");
+}
 if (ignoredKeys.length) {
   const shown = [...new Set(ignoredKeys)];
   console.log(`  ${shown.length} spec key(s) had no effect: ${shown.join(", ")}`);
