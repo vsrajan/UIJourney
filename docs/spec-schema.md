@@ -95,6 +95,20 @@ said nothing about.
 If a dropped line should have been real copy, put it in the spec: `text` on
 the node, or a child node of its own.
 
+## Keys that do nothing are reported
+
+The composer prints any layout-node key it did not act on:
+
+```
+2 spec key(s) had no effect: DataTable.elevation, DataTable.props.stickyHeader
+```
+
+Either it is a typo, or it is codegen metadata that legitimately does not
+affect the picture. This exists because the opposite — silently accepting a
+key and doing nothing — is the failure that has cost the most here: table
+columns, a `size` axis and a scrollbar were each written in good faith and
+quietly ignored, and only the rendered picture disagreed.
+
 ## Nothing outside the spec survives
 
 The scene is generated from the spec every time `compose-scene.mjs` runs, so
@@ -178,11 +192,13 @@ library glyph:
 | `columns` | Header labels, left to right. An empty first entry means the checkbox gutter; a trailing `"Actions"` is implied by `rowActions` |
 | `rows` | Objects keyed loosely by column name (`"Short Description"` matches `short`), or plain arrays in column order |
 | `selectable` | Adds a real `Checkbox` from the library to every row |
-| `scrollbar` | Draws a scrollbar rail down the table's right edge — the wireframe convention for "this list continues" |
+| `scrollbar` | Draws a scrollbar rail down the table's right edge — the wireframe convention for "this list continues". Also accepted as `scroll: "vertical"` (or `"both"`, `"auto"`, `true`), at node level or in `props` |
 | `rowActions` | Per-row buttons. Strings pick a sensible variant (Approve→positive, Reject/Delete→negative); use `{ "label": ..., "variant": ... }` to choose |
 
-Column widths are weighted by their longest content, so a description column
-gets the room an even split would hand to an ID. Colours and band heights come
+Columns take the width their content needs; when the total exceeds the table,
+the surplus comes only from columns that are over-wide, so a description
+column narrows while an ID keeps its size. Cell text longer than its column is
+ellipsized rather than drawn over the next column. Colours and band heights come
 from the library glyph; the structure comes from the spec. Table chrome the
 glyph may carry — a search box, pagination — is **not** synthesized: add it to
 the spec as its own node if the screen needs it.

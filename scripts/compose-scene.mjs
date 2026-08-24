@@ -243,6 +243,31 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasC
 
 const placeholdersDropped = [];
 const iconPlaceholders = [];
+const ignoredKeys = [];
+
+// Keys the composer acts on. Anything else in a layout node is inert, and a
+// spec that silently swallows an inert key is the failure mode that has cost
+// the most here: table columns, a size axis and a scrollbar were each written
+// in good faith, accepted, and then quietly did nothing.
+const NODE_KEYS = new Set([
+  "component", "variant", "text", "typography", "props", "width", "gap",
+  "children", "row", "field", "icon", "size", "color", "center", "scroll",
+  "scrollbar", "scrollable",
+]);
+// props are free-form metadata for codegen EXCEPT on components the composer
+// builds itself, where they drive what gets drawn.
+const SYNTHESIZED_PROPS = new Set([
+  "columns", "rows", "selectable", "rowActions", "scrollbar", "scroll", "scrollable", "icon",
+]);
+function noteUnknownKeys(node, comp) {
+  for (const k of Object.keys(node)) {
+    if (!NODE_KEYS.has(k)) ignoredKeys.push(`${comp}.${k}`);
+  }
+  if (!TABLE_COMPONENTS.includes(comp)) return;
+  for (const k of Object.keys(node.props ?? {})) {
+    if (!SYNTHESIZED_PROPS.has(k)) ignoredKeys.push(`${comp}.props.${k}`);
+  }
+}
 
 // Readable ink for an icon sitting on a filled control: a red or charcoal
 // button needs a white glyph, a ghost button a dark one.
@@ -324,6 +349,17 @@ function actionSpec(a) {
 
 // Builds a table from the spec's own data, using the library glyph only for
 // its colours and band heights. Returns { elements, height }.
+// "show a vertical scrollbar" is worth saying several ways; a spec that only
+// accepts one spelling and ignores the rest looks like it is working.
+function wantsScrollbar(node) {
+  const p = node.props ?? {};
+  for (const v of [node.scroll, p.scroll, node.scrollbar, p.scrollbar, p.scrollable, node.scrollable]) {
+    if (v === true) return true;
+    if (typeof v === "string" && /^(vertical|both|y|auto|true|yes)$/i.test(v)) return true;
+  }
+  return false;
+}
+
 function synthesizeTable(entry, node, { x, y, width, frameId }) {
   const props = node.props ?? {};
   const rawColumns = (props.columns ?? []).map((c) => String(c));
@@ -351,13 +387,34 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
 
   // Remaining width is split by content weight, so "Description" gets room a
   // even split would give to "ID".
-  const weights = columns.map((c, i) => {
-    const longest = rows.reduce((m, r) => Math.max(m, String(cellValue(r, c, i)).length), c.length);
-    return Math.min(Math.max(longest, 6), 60);
+  // Size columns the way a real table does: give each what its content needs,
+  // then take the surplus back only from the columns that are over-wide.
+  // Weighting by character count gave an ID column 52px and truncated
+  // "WI-1001" to "WI-10…", which reads as a bug rather than as long data.
+  const CELL_PAD = 20;
+  const natural = columns.map((c, i) => {
+    const widest = rows.reduce(
+      (m, r) => Math.max(m, textWidth(String(cellValue(r, c, i)), 13)),
+      textWidth(c, 13)
+    );
+    return Math.max(textWidth(c, 13) + CELL_PAD, Math.min(widest + CELL_PAD, 420));
   });
-  const weightSum = weights.reduce((a, b) => a + b, 0) || 1;
   const free = Math.max(200, width - CHECK_W - actionsW - 24);
-  const colW = weights.map((w) => Math.max(64, Math.round((w / weightSum) * free)));
+  let colW = natural.slice();
+  const total = colW.reduce((a, b) => a + b, 0);
+  if (total > free) {
+    // Take the surplus from wide columns only. A column that is already
+    // narrow — an ID, a status — keeps its natural width; a description
+    // column gives up space down to a readable floor.
+    const COMFORTABLE = 110;
+    const floors = natural.map((w) => Math.min(w, COMFORTABLE));
+    let excess = total - free;
+    const slack = colW.map((w, i) => Math.max(0, w - floors[i]));
+    const slackSum = slack.reduce((a, b) => a + b, 0);
+    if (slackSum > 0) {
+      colW = colW.map((w, i) => Math.round(w - Math.min(slack[i], (slack[i] / slackSum) * excess)));
+    }
+  }
 
   const headerH = band?.height ?? 40;
   const rowH = Math.max(band?.height ?? 44, 44);
@@ -373,10 +430,25 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
   }));
 
   const cellX = (i) => x + 12 + CHECK_W + colW.slice(0, i).reduce((a, b) => a + b, 0);
+  // Clip to the column. A cell wider than its column does not wrap in a real
+  // table, it ellipsizes — and left undone it draws straight over the next
+  // column, which reads as a layout bug rather than as long data.
+  const clip = (text, w, size) => {
+    const t = String(text ?? "");
+    if (textWidth(t, size) <= w) return t;
+    let lo = 0, hi = t.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (textWidth(t.slice(0, mid) + "…", size) <= w) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo > 0 ? t.slice(0, lo).trimEnd() + "…" : "";
+  };
   const textEl = (text, cx, cy, w, { size = 13, color = fg, weight } = {}) => stamp({
     id: nextId("cell"), type: "text", x: cx, y: cy, width: Math.max(8, w), height: Math.round(size * 1.25),
     strokeColor: color, backgroundColor: "transparent", strokeWidth: 0,
-    text: String(text), originalText: String(text), fontSize: size, fontFamily: 2,
+    text: clip(text, Math.max(8, w), size), originalText: clip(text, Math.max(8, w), size),
+    fontSize: size, fontFamily: 2,
     textAlign: "left", verticalAlign: "top", containerId: null, lineHeight: 1.25, autoResize: false,
     frameId, customData: { component: "TableCell", props: weight ? { weight } : {}, synthesized: true },
   });
@@ -428,7 +500,7 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
   // A scrollbar rail is how a wireframe says "this list continues past the
   // viewport" — the spec asks for it, so draw it rather than leaving the
   // reviewer to infer it from a row count.
-  if (props.scrollbar) {
+  if (wantsScrollbar(node)) {
     const railW = 6;
     const railX = x + width - railW - 4;
     out.push(stamp({
@@ -511,6 +583,7 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
       }
       const comp = node.component;
       if (!comp) die(`layout node without a component: ${JSON.stringify(node)}`);
+      noteUnknownKeys(node, comp);
 
       if (TYPOGRAPHY_COMPONENTS.has(comp)) {
         const el = typographyEl({
@@ -728,6 +801,11 @@ writeFileSync(outPath, JSON.stringify(scene, null, 2));
 console.log(`wrote ${outPath}`);
 console.log(`  ${frameIds.length} screen(s), ${elements.length} element(s), ${Object.keys(files).length} embedded file(s)`);
 if (!logo) console.log("  WARN: no lib/logo.json — the logo will not render; run scripts/embed-logo.mjs");
+if (ignoredKeys.length) {
+  const shown = [...new Set(ignoredKeys)];
+  console.log(`  ${shown.length} spec key(s) had no effect: ${shown.join(", ")}`);
+  console.log("  Either the key is a typo, or it is codegen metadata that does not affect the picture.");
+}
 if (iconPlaceholders.length) {
   const shown = [...new Set(iconPlaceholders)];
   console.log(`  ${shown.length} icon(s) drawn as named placeholders: ${shown.join(", ")}`);
