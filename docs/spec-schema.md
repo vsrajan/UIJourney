@@ -223,10 +223,28 @@ and the variant carries the semantics through to codegen:
 
 The value becomes the component's label and the mapped variant selects the
 library entry, so the colours are your kit's, not invented. A value with no
-mapping uses `default`; a variant that does not exist in the library falls
-back to plain text and is reported, rather than guessing at a near match.
-Check `lib/CATALOG.md` for the variants your kit actually has — `positive`
-and `warning` are common, but not universal.
+mapping uses `default`.
+
+**`default` goes inside the column entry, beside `variants` — not beside
+`Status`.** A sibling `default` is read as a column of that name and reported
+as malformed.
+
+**Check what your kit's Badge actually has before mapping onto it.**
+`positive` and `warning` are common but far from universal; shadcn ships
+`default` / `secondary` / `destructive` / `outline`. Ask the library:
+
+```
+node -e 'const l=require("./lib/uds.excalidrawlib");console.log([...new Set(
+  l.libraryItems.flatMap(i=>i.elements)
+   .filter(e=>e.customData?.component==="Badge")
+   .map(e=>e.customData.variant??"default"))].join(", "))'
+```
+
+A variant the library cannot provide is named in the composer's output along
+with what it substituted, e.g. `Badge/positive (library gave Badge/default)`.
+That report matters: library lookup deliberately degrades rather than failing,
+so without it every status would quietly collapse onto the same badge and the
+column would look styled while carrying no information.
 
 Synthesized elements carry `customData.synthesized: true`, which exempts them
 from library size conformance (their geometry is the composer's, not the

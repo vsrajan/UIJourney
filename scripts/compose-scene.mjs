@@ -245,6 +245,7 @@ const placeholdersDropped = [];
 const iconPlaceholders = [];
 const ignoredKeys = [];
 const missingCellComponents = [];
+const badCellSpecs = [];
 
 // A 2px rule under an element — the active-nav-item and selected-tab
 // affordance. `underline: true` uses --primary; a token or hex overrides it.
@@ -517,11 +518,23 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
     columns.forEach((c, i) => {
       const value = cellValue(row, c, i);
       const spec_ = cellComponents[c] ?? cellComponents[normKey(c)];
-      if (spec_) {
+      if (spec_ && !spec_.component) {
+        badCellSpecs.push(`${c}: entry has no "component" — expected { "component": "Badge", "variants": { ... } }`);
+      } else if (spec_) {
         // A status column reads far better as the kit's own Badge than as
         // plain text, and the variant carries the semantics into codegen.
         const variant = spec_.variants?.[String(value)] ?? spec_.variants?.[String(value).toLowerCase()] ?? spec_.default ?? "default";
-        const cellEntry = lookupEntry(libIndex, spec_.component, { variant, ...(spec_.props ?? {}) });
+        const wanted = { variant, ...(spec_.props ?? {}) };
+        const cellEntry = lookupEntry(libIndex, spec_.component, wanted);
+        // lookupEntry degrades on purpose so an unknown size cannot kill a
+        // run. For a status column the variant IS the point, so a degraded
+        // match must be loud: every value silently collapsing onto the same
+        // fallback badge is worse than no badges at all.
+        const missed = cellEntry ? unmatchedAxes(cellEntry, wanted) : [];
+        const gotVariant = cellEntry?.axes?.variant ?? "default";
+        if (cellEntry && (missed.length || gotVariant !== variant)) {
+          missingCellComponents.push(`${spec_.component}/${variant} (library gave ${spec_.component}/${gotVariant})`);
+        }
         if (cellEntry) {
           if (cellEntry.source === "derived") derivedUsed.add(spec_.component);
           const bh = cellEntry.anchor.height ?? 22;
@@ -533,7 +546,7 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
           }));
           return;
         }
-        missingCellComponents.push(`${spec_.component}/${variant}`);
+        missingCellComponents.push(`${spec_.component}/${variant} (component not in the library)`);
       }
       out.push(textEl(value, cellX(i), ry + Math.round((rowH - 16) / 2), colW[i] - 12));
     });
@@ -860,10 +873,15 @@ writeFileSync(outPath, JSON.stringify(scene, null, 2));
 console.log(`wrote ${outPath}`);
 console.log(`  ${frameIds.length} screen(s), ${elements.length} element(s), ${Object.keys(files).length} embedded file(s)`);
 if (!logo) console.log("  WARN: no lib/logo.json — the logo will not render; run scripts/embed-logo.mjs");
+if (badCellSpecs.length) {
+  for (const b of [...new Set(badCellSpecs)]) console.log(`  cellComponents malformed — ${b}`);
+  console.log('  "default" belongs INSIDE a column entry, not beside it.');
+}
 if (missingCellComponents.length) {
   const shown = [...new Set(missingCellComponents)];
-  console.log(`  cell component(s) not in the library, rendered as text: ${shown.join(", ")}`);
-  console.log("  Check lib/CATALOG.md for the variants your kit actually has.");
+  console.log(`  cell variant(s) the library could not provide: ${shown.join(", ")}`);
+  console.log("  List what your kit really has:");
+  console.log(`    node -e 'const l=require("./lib/uds.excalidrawlib");console.log([...new Set(l.libraryItems.flatMap(i=>i.elements).filter(e=>e.customData?.component==="Badge").map(e=>e.customData.variant??"default"))].join(", "))'`);
 }
 if (ignoredKeys.length) {
   const shown = [...new Set(ignoredKeys)];
