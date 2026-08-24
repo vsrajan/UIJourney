@@ -428,8 +428,14 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
   // "WI-1001" to "WI-10…", which reads as a bug rather than as long data.
   const CELL_PAD = 20;
   const natural = columns.map((c, i) => {
+    // A column rendered as a component needs room for the component's own
+    // padding and any icon, not just the text — otherwise the badge is capped
+    // at the column width and its label spills out of the pill.
+    const cc = cellComponents[c] ?? cellComponents[normKey(c)];
+    const size = cc ? 12 : 13;
+    const chrome = cc ? 24 + (cc.icons || cc.icon ? 20 : 0) : 0;
     const widest = rows.reduce(
-      (m, r) => Math.max(m, textWidth(String(cellValue(r, c, i)), 13)),
+      (m, r) => Math.max(m, textWidth(String(cellValue(r, c, i)), size) + chrome),
       textWidth(c, 13)
     );
     return Math.max(textWidth(c, 13) + CELL_PAD, Math.min(widest + CELL_PAD, 420));
@@ -538,12 +544,39 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
         if (cellEntry) {
           if (cellEntry.source === "derived") derivedUsed.add(spec_.component);
           const bh = cellEntry.anchor.height ?? 22;
-          const bw = Math.min(colW[i] - 12, Math.max(cellEntry.anchor.width ?? 72, textWidth(String(value), 12) + 20));
-          out.push(...instantiate(cellEntry, {
+          // A per-value icon is a second channel that does not depend on how
+          // saturated the fill is — the thing that makes a soft-tint badge
+          // readable at wireframe zoom.
+          const iconName = spec_.icons?.[String(value)] ?? spec_.icons?.[String(value).toLowerCase()] ?? spec_.icon;
+          const iconSize = iconName ? Math.min(14, Math.max(10, Math.round(bh * 0.55))) : 0;
+          const iconPad = iconName ? iconSize + 6 : 0;
+          const bw = Math.min(
+            colW[i] - 12,
+            Math.max(cellEntry.anchor.width ?? 72, textWidth(String(value), 12) + 20 + iconPad)
+          );
+          const made = instantiate(cellEntry, {
             x: cellX(i), y: ry + Math.round((rowH - bh) / 2), width: bw, frameId,
             texts: { __label: String(value), [spec_.component]: String(value) },
             props: { variant, ...(spec_.props ?? {}) },
-          }));
+          });
+          out.push(...made);
+          if (iconName) {
+            const anchorEl = made.find((e) => e.customData?.component === spec_.component) ?? made[0];
+            const label = made.find((e) => e.type === "text" && String(e.text ?? "").trim());
+            const ix = anchorEl.x + 8;
+            const iy = anchorEl.y + Math.round((anchorEl.height - iconSize) / 2);
+            const els = drawIcon(iconName, {
+              x: ix, y: iy, size: iconSize,
+              color: label?.strokeColor ?? contrastOn(anchorEl.backgroundColor),
+              frameId, stamp, nextId,
+            });
+            if (els.length === 1 && els[0].type === "rectangle") iconPlaceholders.push(String(iconName));
+            if (label) {
+              const shift = ix + iconSize + 5 - label.x;
+              if (shift > 0) label.x += shift;
+            }
+            out.push(...els);
+          }
           return;
         }
         missingCellComponents.push(`${spec_.component}/${variant} (component not in the library)`);

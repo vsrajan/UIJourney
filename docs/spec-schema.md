@@ -221,6 +221,24 @@ and the variant carries the semantics through to codegen:
 }
 ```
 
+Add `icons` to give each value a glyph as well:
+
+```json
+"Status": {
+  "component": "Badge",
+  "props": { "size": "lg" },
+  "variants": { "Running": "info", "Completed": "success", "Failed": "error" },
+  "icons":    { "Running": "refresh", "Completed": "check", "Failed": "x" },
+  "default": "default"
+}
+```
+
+A single `"icon": "..."` applies one glyph to every value. Icons are worth
+reaching for when a kit's badges use soft tints: the fill may be too faint to
+read at wireframe zoom, and the glyph is a second channel that does not depend
+on saturation. The column widens to fit the badge's padding and icon, so the
+label stays inside the pill.
+
 The value becomes the component's label and the mapped variant selects the
 library entry, so the colours are your kit's, not invented. A value with no
 mapping uses `default`.
