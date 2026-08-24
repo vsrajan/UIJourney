@@ -121,6 +121,19 @@ Excalidraw primitives and coloured from a token:
 | `size` | Box size in px, default 16 |
 | `color` | Token, default `--foreground` |
 
+`props.icon` on a **component** draws the icon inside it instead: centred when
+the control has no label, at the leading edge with the label shifted clear
+when it does, and in white or dark ink depending on the fill. So an icon
+button is the component it really is —
+
+```json
+{ "component": "Button", "variant": "ghost", "props": { "size": "icon-xs", "icon": "filter" } }
+```
+
+— with no `text` at all. A stretchable control also grows to fit its label
+and icon, so a long label does not overflow the width the glyph was authored
+at.
+
 An unknown name is **not** an error: it becomes a named placeholder box that
 reserves the right space and still carries `customData.props.icon`, which is
 what codegen imports. The composer reports which names fell back, so adding a

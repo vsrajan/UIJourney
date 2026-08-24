@@ -243,6 +243,17 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasC
 
 const placeholdersDropped = [];
 const iconPlaceholders = [];
+
+// Readable ink for an icon sitting on a filled control: a red or charcoal
+// button needs a white glyph, a ghost button a dark one.
+function contrastOn(bg) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(bg ?? "").replace("#", "#"));
+  if (!m) return resolveColor("--foreground", "#1C1C1C");
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return lum < 0.5 ? "#FFFFFF" : resolveColor("--foreground", "#1C1C1C");
+}
 const textWidth = (t, size) => Math.ceil(String(t).length * size * 0.6);
 // The box a run of text actually occupies, one line-height per line.
 const textHeight = (t, size = 16, lineHeight = 1.25) =>
@@ -557,6 +568,32 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
       const anchorClone = created.find((e) => e.customData?.component === comp);
       const h = anchorClone?.height ?? 0;
 
+      // props.icon on a component draws the icon inside it. The sketcher
+      // models an icon button exactly right — ghost variant, size icon-xs,
+      // props.icon: "filter" — and only the glyph itself was missing, which
+      // is why it used to arrive as a Unicode character in the label.
+      if (node.props?.icon && anchorClone) {
+        const label = created.find((e) => e.type === "text" && String(e.text ?? "").trim());
+        const iconSize = Math.min(20, Math.max(12, Math.round(anchorClone.height * 0.5)));
+        const iconColor = label?.strokeColor ?? contrastOn(anchorClone.backgroundColor);
+        // Centred when the control is icon-only; at the leading edge when it
+        // also carries a label, which is where a real icon button puts it.
+        const ix = label
+          ? anchorClone.x + 10
+          : anchorClone.x + Math.round((anchorClone.width - iconSize) / 2);
+        const iy = anchorClone.y + Math.round((anchorClone.height - iconSize) / 2);
+        const els = drawIcon(node.props.icon, {
+          x: ix, y: iy, size: iconSize, color: iconColor, frameId: fid, stamp, nextId,
+        });
+        if (els.length === 1 && els[0].type === "rectangle") iconPlaceholders.push(String(node.props.icon));
+        if (label) {
+          // Shift the label clear of the icon so they do not overlap.
+          const shift = ix + iconSize + 6 - label.x;
+          if (shift > 0) label.x += shift;
+        }
+        elements.push(...els);
+      }
+
       if (node.children?.length) {
         // Card-like container: stack children inside with padding, then grow
         // the surface to fit them.
@@ -591,7 +628,21 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
       return textWidth(node.text ?? "", size);
     }
     const entry = lookup(comp, node);
-    return entry?.anchor?.width ?? null;
+    if (!entry) return null;
+    const glyphW = entry.anchor?.width ?? null;
+    const resize = entry.anchor?.customData?.resize ?? "none";
+    if (glyphW == null || (resize !== "horizontal" && resize !== "both")) return glyphW;
+
+    // A stretchable control must fit its own label. The glyph was authored
+    // around whatever copy the library used ("Button"), so a longer label
+    // overflows unless the padding is carried across to the real text.
+    const label = node.text ?? textFromProps(node.props);
+    if (!label) return glyphW;
+    const glyphText = entry.item.elements.find((e) => e.type === "text" && String(e.text ?? "").trim());
+    const fontSize = glyphText?.fontSize ?? 14;
+    const pad = Math.max(16, glyphW - textWidth(glyphText?.text ?? "", fontSize));
+    const iconAllowance = node.props?.icon ? Math.min(20, Math.max(12, Math.round((entry.anchor.height ?? 32) * 0.5))) + 6 : 0;
+    return Math.max(glyphW, textWidth(label, fontSize) + pad + iconAllowance);
   };
 
   const placeRow = (nodes, originX, availWidth) => {
