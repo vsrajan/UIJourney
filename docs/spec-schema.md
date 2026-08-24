@@ -234,11 +234,12 @@ as malformed.
 `default` / `secondary` / `destructive` / `outline`. Ask the library:
 
 ```
-node -e 'const l=require("./lib/uds.excalidrawlib");console.log([...new Set(
-  l.libraryItems.flatMap(i=>i.elements)
-   .filter(e=>e.customData?.component==="Badge")
-   .map(e=>e.customData.variant??"default"))].join(", "))'
+node scripts/lib-index.mjs Badge
 ```
+
+which prints each variant with the fill, border and text colour it really
+uses — so you can see at a glance whether the kit has semantic colours to
+select at all.
 
 A variant the library cannot provide is named in the composer's output along
 with what it substituted, e.g. `Badge/positive (library gave Badge/default)`.

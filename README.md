@@ -162,7 +162,9 @@ runs there.
      (self-testing: `node scripts/placeholder-text.mjs --selftest`),
      `doctor.mjs` (checks this machine can render the kit before a
      librarian run), `icons.mjs` (`node scripts/icons.mjs` lists the drawn
-     icon set).
+     icon set). `node scripts/lib-index.mjs [Component]` answers "what does
+     my kit actually have?" — components, their variant axes, and the fills
+     each variant uses.
      Plain Node, no dependencies
      except Playwright, which only the PNG preview needs, and `ts-morph`,
      which `ensure-parser.mjs` installs for the extractor into a gitignored

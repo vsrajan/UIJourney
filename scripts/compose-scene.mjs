@@ -880,8 +880,7 @@ if (badCellSpecs.length) {
 if (missingCellComponents.length) {
   const shown = [...new Set(missingCellComponents)];
   console.log(`  cell variant(s) the library could not provide: ${shown.join(", ")}`);
-  console.log("  List what your kit really has:");
-  console.log(`    node -e 'const l=require("./lib/uds.excalidrawlib");console.log([...new Set(l.libraryItems.flatMap(i=>i.elements).filter(e=>e.customData?.component==="Badge").map(e=>e.customData.variant??"default"))].join(", "))'`);
+  console.log("  List what your kit really has:  node scripts/lib-index.mjs <Component>");
 }
 if (ignoredKeys.length) {
   const shown = [...new Set(ignoredKeys)];

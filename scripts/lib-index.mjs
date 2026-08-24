@@ -3,6 +3,15 @@
 // validate-scene.mjs so the two can never disagree about which library entry
 // a scene element corresponds to.
 //
+// Also answers "what does my kit actually have?" from the command line:
+//
+//   node scripts/lib-index.mjs                    # every component
+//   node scripts/lib-index.mjs Badge              # Badge's variants and fills
+//
+// Note for anyone reaching for a one-liner instead: require() only parses
+// .json, so require("./lib/uds.excalidrawlib") tries to EXECUTE the library
+// as JavaScript and dies on the first colon. Read and JSON.parse it.
+//
 // Why it exists: the original index keyed on `component/variant` alone. A kit
 // Button has two axes (variant and size), so the librarian emits 48 entries
 // and the composer could address 6 of them — a spec asking for
@@ -111,4 +120,51 @@ export function unmatchedAxes(entry, wanted = {}) {
     if (cv !== undefined && cv !== v) out.push(`${k}=${v} (got ${cv})`);
   }
   return out;
+}
+
+
+// ------------------------------------------------------------------ CLI
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const { readFileSync, existsSync } = await import("node:fs");
+  const argv = process.argv.slice(2);
+  const libPath = argv.find((a) => a.endsWith(".excalidrawlib")) ?? "lib/uds.excalidrawlib";
+  const which = argv.find((a) => !a.endsWith(".excalidrawlib"));
+
+  if (!existsSync(libPath)) {
+    console.error(`ERROR: ${libPath} not found — run this from the repo root, or pass the path`);
+    process.exit(1);
+  }
+  const lib = JSON.parse(readFileSync(libPath, "utf8"));
+  const index = buildIndex(lib);
+
+  if (!which) {
+    const rows = [...index.byComponent.entries()]
+      .map(([name, c]) => [name, c.length, [...(index.axisKeys.get(name) ?? [])].join(",") || "-"])
+      .sort((a, b) => a[0].localeCompare(b[0]));
+    const w = Math.max(...rows.map((r) => r[0].length));
+    console.log(`${"COMPONENT".padEnd(w)}  ENTRIES  AXES`);
+    for (const [name, n, axes] of rows) console.log(`${name.padEnd(w)}  ${String(n).padStart(7)}  ${axes}`);
+    console.log(`\n${rows.length} component(s). Name one to see its variants: node scripts/lib-index.mjs Badge`);
+    process.exit(0);
+  }
+
+  const entries = index.byComponent.get(which);
+  if (!entries) {
+    const near = [...index.byComponent.keys()].filter((k) => k.toLowerCase().includes(which.toLowerCase()));
+    console.error(`"${which}" is not in ${libPath}.${near.length ? ` Did you mean: ${near.join(", ")}?` : ""}`);
+    process.exit(1);
+  }
+  console.log(`${which} — ${entries.length} entr(ies) in ${libPath}\n`);
+  const seen = new Set();
+  for (const e of entries) {
+    const axes = Object.entries(e.axes).map(([k, v]) => `${k}=${v}`).join(" ") || "(no axes)";
+    if (seen.has(axes)) continue;
+    seen.add(axes);
+    const fill = e.anchor.backgroundColor ?? "-";
+    const stroke = e.anchor.strokeColor ?? "-";
+    const label = e.item.elements.find((x) => x.type === "text");
+    const ink = label?.strokeColor ?? "-";
+    console.log(`  ${axes.padEnd(34)} fill ${String(fill).padEnd(9)} border ${String(stroke).padEnd(9)} text ${ink}`);
+  }
+  console.log("\nUse these axis values verbatim in a spec — they are what the composer matches on.");
 }
