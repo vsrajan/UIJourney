@@ -62,6 +62,12 @@ without the ceremony, so the developer can iterate on layout and copy first.
    drawn, and an unlisted name still works as a named placeholder. Pagination
    controls are `chevron-left` / `chevron-right`, a sortable column header is
    `sort`.
+
+   Two more things a screen usually wants that exist only if you ask:
+   `"underline": true` marks the active nav item or selected tab with a rule
+   in `--primary`, and a status column becomes the kit's own Badge through
+   `props.cellComponents` rather than plain text — check `lib/CATALOG.md` for
+   the variants your kit actually has before mapping values onto them.
 3. If a component you need is absent from `lib/index.json`, stop and report
    the gap, naming the closest available alternative. Do not substitute
    silently.
