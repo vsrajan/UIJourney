@@ -29,6 +29,23 @@ do not reinterpret a picture.
   `<journey name>` from the current scene on `<branch>` — this assumes the
   mockup is approved." Proceed unless the developer objects.
 
+## Icons
+
+An element with `customData.props.icon` names a kit icon the mockup drew from
+primitives. The glyph in the scene is a wireframe stand-in; **the name is the
+contract**. Emit the real icon component from the kit's icon package.
+
+How it is passed depends on the component. Check the source before assuming:
+a component that renders `children` (a `span`, or a Radix `Slot.Root` under
+`asChild`) takes the icon as its first child —
+
+```tsx
+<Badge variant="info"><RefreshIcon className="size-3" /> Running</Badge>
+```
+
+— whereas a component with an explicit `icon` or `startIcon` prop takes it
+there. Getting this wrong produces code that compiles and renders nothing.
+
 ## Outputs (committed to the same mockup branch)
 1. `src/screens/<journey-name>/<ScreenName>.tsx` — one component per frame,
    built exclusively from `src/components/ui/` imports.
