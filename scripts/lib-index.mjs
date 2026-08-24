@@ -55,9 +55,20 @@ export function buildIndex(lib) {
         byComponent.set(component, []);
         axisKeys.set(component, new Set());
       }
-      byComponent.get(component).push({
-        axes, tags: nameTags(item, component), item, anchor: el, source: el.customData.source,
-      });
+      // The anchor is the element the composer positions and resizes, so it
+      // must be the glyph's PRIMARY shape. Taking whichever came first meant
+      // a decorative accent bar listed ahead of the pill became the anchor,
+      // and a Badge rendered as a thin coloured line behind its own label.
+      // Largest area wins; a tie keeps the earlier element.
+      const key = JSON.stringify(Object.entries(axes).sort());
+      const list = byComponent.get(component);
+      const area = (e) => Math.abs((e.width ?? 0) * (e.height ?? 0));
+      const existing = list.find((c) => JSON.stringify(Object.entries(c.axes).sort()) === key && c.item === item);
+      if (existing) {
+        if (area(el) > area(existing.anchor)) existing.anchor = el;
+      } else {
+        list.push({ axes, tags: nameTags(item, component), item, anchor: el, source: el.customData.source });
+      }
       for (const k of Object.keys(axes)) axisKeys.get(component).add(k);
     }
   }
@@ -154,6 +165,25 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error(`"${which}" is not in ${libPath}.${near.length ? ` Did you mean: ${near.join(", ")}?` : ""}`);
     process.exit(1);
   }
+  if (argv.includes("--elements")) {
+    console.log(`${which} — full element breakdown\n`);
+    for (const e of entries) {
+      const axes = Object.entries(e.axes).map(([k, v]) => `${k}=${v}`).join(" ") || "(no axes)";
+      console.log(`  ${e.item.name ?? e.item.id ?? "(unnamed)"}   [${axes}]`);
+      for (const el of e.item.elements) {
+        const anchor = el.id === e.anchor.id ? " <-- ANCHOR" : "";
+        const txt = el.text ? `  ${JSON.stringify(String(el.text).slice(0, 20))}` : "";
+        console.log(
+          `      ${String(el.type).padEnd(10)} ${String(Math.round(el.width ?? 0)).padStart(4)}x${String(Math.round(el.height ?? 0)).padEnd(4)}` +
+            ` fill ${String(el.backgroundColor ?? "-").padEnd(9)} stroke ${String(el.strokeColor ?? "-").padEnd(9)}` +
+            ` ${String(el.customData?.component ?? "")}${txt}${anchor}`
+        );
+      }
+      console.log();
+    }
+    process.exit(0);
+  }
+
   console.log(`${which} — ${entries.length} entr(ies) in ${libPath}\n`);
   const seen = new Set();
   for (const e of entries) {
