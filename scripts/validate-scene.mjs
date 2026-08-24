@@ -138,7 +138,16 @@ function libEntryFor(cd) {
 // entry: the page ground, and the parts of a table synthesized from spec data
 // (the library holds one generic DataTable glyph; a real table's shape is its
 // columns, which only the spec knows).
-const SCENE_ONLY_COMPONENTS = new Set(["PageBackground", "TableHeader", "TableRow", "TableCell"]);
+const SCENE_ONLY_COMPONENTS = new Set([
+  "PageBackground", "TableHeader", "TableRow", "TableCell", "Icon",
+  "ScrollbarTrack", "ScrollbarThumb",
+]);
+
+// A lone symbol character standing in for an icon. It renders as text, may be
+// missing from the font, and tells codegen nothing — a "▽" becomes a text node
+// rather than <FilterIcon />. Cell values are exempt: an em dash meaning "no
+// value" is data the spec supplied, not a disguised icon.
+const SYMBOL_AS_ICON = /^[\u2190-\u21FF\u2200-\u22FF\u2300-\u23FF\u25A0-\u25FF\u2600-\u27BF\u2039\u203A\u00AB\u00BB\u2022\u00D7\u2713\u2714\u2717]$/u;
 
 const PLACEHOLDER_HOSTS = new Set(["Input", "Textarea", "Select", "Combobox"]);
 
@@ -398,6 +407,20 @@ if (derivedInScene.size || stamped) {
       `scene uses derived library entries (${[...derivedInScene].sort().join(", ")}) but is not stamped customData.provisional — ` +
         `recompose with scripts/compose-scene.mjs rather than editing the scene. Never remove the flag to get past validation: ` +
         `it is the only thing stopping journey-coder generating layout from estimated widths`
+    );
+  }
+}
+
+for (const el of els) {
+  if (el.type !== "text") continue;
+  const cd = el.customData ?? {};
+  if (cd.component === "TableCell" || cd.synthesized) continue;
+  const t = String(el.text ?? "").trim();
+  if (SYMBOL_AS_ICON.test(t)) {
+    errors.push(
+      `text "${t}" is a symbol character standing in for an icon — use a spec icon node ` +
+        `({ "icon": "filter" }) so it is drawn from primitives and carries customData.props.icon, ` +
+        `which is what codegen imports`
     );
   }
 }

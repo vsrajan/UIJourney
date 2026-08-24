@@ -161,7 +161,8 @@ runs there.
      `tailwind-metrics.mjs`, `lib-index.mjs`, `placeholder-text.mjs`
      (self-testing: `node scripts/placeholder-text.mjs --selftest`),
      `doctor.mjs` (checks this machine can render the kit before a
-     librarian run).
+     librarian run), `icons.mjs` (`node scripts/icons.mjs` lists the drawn
+     icon set).
      Plain Node, no dependencies
      except Playwright, which only the PNG preview needs, and `ts-morph`,
      which `ensure-parser.mjs` installs for the extractor into a gitignored

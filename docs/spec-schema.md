@@ -106,6 +106,32 @@ journey without redesigning anything. The corollary is that "I removed it and
 it came back" always means the removal happened somewhere the spec does not
 read.
 
+## Icons
+
+`{ "icon": "filter" }` is a layout node in its own right, drawn from
+Excalidraw primitives and coloured from a token:
+
+```json
+{ "row": [ { "icon": "filter" }, { "component": "Select", "text": "Archived: false" } ] }
+```
+
+| Key | Meaning |
+|---|---|
+| `icon` | Icon name — `node scripts/icons.mjs` lists what is drawn |
+| `size` | Box size in px, default 16 |
+| `color` | Token, default `--foreground` |
+
+An unknown name is **not** an error: it becomes a named placeholder box that
+reserves the right space and still carries `customData.props.icon`, which is
+what codegen imports. The composer reports which names fell back, so adding a
+shape to `scripts/icons.mjs` is a deliberate choice rather than something you
+discover from the picture.
+
+**Never use a Unicode symbol as an icon.** A `"▽"` or `"‹"` in a text node
+renders as text, may be missing from the font, and gives codegen a string
+where it needed a component — `validate-scene.mjs` rejects it. Table cell
+values are exempt, so an em dash meaning "no value" is still fine.
+
 ## Variant axes
 
 A node's `variant` plus any string-valued `props` are matched against the
@@ -139,6 +165,7 @@ library glyph:
 | `columns` | Header labels, left to right. An empty first entry means the checkbox gutter; a trailing `"Actions"` is implied by `rowActions` |
 | `rows` | Objects keyed loosely by column name (`"Short Description"` matches `short`), or plain arrays in column order |
 | `selectable` | Adds a real `Checkbox` from the library to every row |
+| `scrollbar` | Draws a scrollbar rail down the table's right edge — the wireframe convention for "this list continues" |
 | `rowActions` | Per-row buttons. Strings pick a sensible variant (Approve→positive, Reject/Delete→negative); use `{ "label": ..., "variant": ... }` to choose |
 
 Column widths are weighted by their longest content, so a description column

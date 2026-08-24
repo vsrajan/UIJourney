@@ -54,6 +54,14 @@ without the ceremony, so the developer can iterate on layout and copy first.
    enough to show truncation and column balance, few enough to stay quick.
    Reach for a variant axis the same way: `props: { "size": "sm" }` selects
    the small Button, it is not decoration.
+
+   **Ask for icons with an icon node**, `{ "icon": "filter" }` — never a
+   Unicode character. A `"▽"` standing in for a filter icon renders as text,
+   may be missing from the font, and hands codegen a string where it needed a
+   component; the validator rejects it. `node scripts/icons.mjs` lists what is
+   drawn, and an unlisted name still works as a named placeholder. Pagination
+   controls are `chevron-left` / `chevron-right`, a sortable column header is
+   `sort`.
 3. If a component you need is absent from `lib/index.json`, stop and report
    the gap, naming the closest available alternative. Do not substitute
    silently.

@@ -28,6 +28,7 @@ import { dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildIndex, lookupEntry, unmatchedAxes } from "./lib-index.mjs";
 import { isScaffoldText, PLACEHOLDER_HOSTS } from "./placeholder-text.mjs";
+import { drawIcon, iconNames } from "./icons.mjs";
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const argv = process.argv.slice(2);
@@ -241,6 +242,7 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasC
 }
 
 const placeholdersDropped = [];
+const iconPlaceholders = [];
 const textWidth = (t, size) => Math.ceil(String(t).length * size * 0.6);
 // The box a run of text actually occupies, one line-height per line.
 const textHeight = (t, size = 16, lineHeight = 1.25) =>
@@ -412,6 +414,29 @@ function synthesizeTable(entry, node, { x, y, width, frameId }) {
     }
   });
 
+  // A scrollbar rail is how a wireframe says "this list continues past the
+  // viewport" — the spec asks for it, so draw it rather than leaving the
+  // reviewer to infer it from a row count.
+  if (props.scrollbar) {
+    const railW = 6;
+    const railX = x + width - railW - 4;
+    out.push(stamp({
+      id: nextId("scrollrail"), type: "rectangle", x: railX, y: y + headerH + 4,
+      width: railW, height: Math.max(0, totalH - headerH - 8),
+      strokeColor: "transparent", backgroundColor: border, strokeWidth: 0,
+      fillStyle: "solid", roughness: 0, roundness: { type: 3 }, frameId,
+      customData: { component: "ScrollbarTrack", props: {}, synthesized: true },
+    }));
+    const thumbH = Math.max(24, Math.round((totalH - headerH - 8) * 0.35));
+    out.push(stamp({
+      id: nextId("scrollthumb"), type: "rectangle", x: railX, y: y + headerH + 6,
+      width: railW, height: thumbH,
+      strokeColor: "transparent", backgroundColor: muted, strokeWidth: 0,
+      fillStyle: "solid", roughness: 0, roundness: { type: 3 }, frameId,
+      customData: { component: "ScrollbarThumb", props: {}, synthesized: true },
+    }));
+  }
+
   return { elements: out, height: totalH };
 }
 
@@ -454,6 +479,19 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
   const place = (nodes, originX, availWidth, indent = 0) => {
     for (const node of nodes) {
       if (node.row) { placeRow(node.row, originX, availWidth); continue; }
+
+      // { "icon": "filter" } — drawn from primitives, coloured from a token.
+      if (node.icon) {
+        const size = node.size ?? 16;
+        const color = resolveColor(node.color ?? "--foreground", "#1C1C1C");
+        const els = drawIcon(node.icon, { x: originX, y, size, color, frameId: fid, stamp, nextId });
+        if (els.length === 1 && els[0].type === "rectangle") {
+          iconPlaceholders.push(String(node.icon));
+        }
+        elements.push(...els);
+        y += size + (node.gap ?? GAP);
+        continue;
+      }
       if (node.field) {
         const { label, ...control } = node.field;
         place([{ component: "Label", text: label, gap: LABEL_GAP }], originX, availWidth);
@@ -544,6 +582,7 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
   const naturalWidth = (node) => {
     if (node.width != null) return node.width;
     if (node.row) return null;
+    if (node.icon) return node.size ?? 16;
     const comp = node.field?.component ?? node.component;
     if (!comp) return null;
     if (TYPOGRAPHY_COMPONENTS.has(comp)) {
@@ -638,6 +677,12 @@ writeFileSync(outPath, JSON.stringify(scene, null, 2));
 console.log(`wrote ${outPath}`);
 console.log(`  ${frameIds.length} screen(s), ${elements.length} element(s), ${Object.keys(files).length} embedded file(s)`);
 if (!logo) console.log("  WARN: no lib/logo.json — the logo will not render; run scripts/embed-logo.mjs");
+if (iconPlaceholders.length) {
+  const shown = [...new Set(iconPlaceholders)];
+  console.log(`  ${shown.length} icon(s) drawn as named placeholders: ${shown.join(", ")}`);
+  console.log(`  Known icons: ${iconNames().join(", ")}`);
+  console.log("  A placeholder keeps the name for codegen; add a shape to scripts/icons.mjs to draw it properly.");
+}
 if (placeholdersDropped.length) {
   const shown = [...new Set(placeholdersDropped)];
   console.log(`  dropped ${placeholdersDropped.length} glyph placeholder(s): ${shown.slice(0, 6).join(", ")}${shown.length > 6 ? ", ..." : ""}`);
