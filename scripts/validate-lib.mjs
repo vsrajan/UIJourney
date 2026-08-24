@@ -325,6 +325,24 @@ for (const item of lib.libraryItems ?? []) {
     }
   }
 
+  // ------- implausibly small entries are measurement failures
+  // A 4x4 badge whose label is also "4x4" is not a small badge; it is an
+  // element that had not laid out when it was measured — collapsed, hidden,
+  // or read before fonts settled. Left in the library it becomes a coloured
+  // hairline the moment a composer stretches it.
+  if (container && container.type !== "text") {
+    const w = container.width ?? 0, h = container.height ?? 0;
+    if (w > 0 && h > 0 && Math.min(w, h) < 10) {
+      warns.push(`${name}: anchor is ${Math.round(w)}x${Math.round(h)} — too small to be a real control; re-measure, the element had probably not laid out`);
+    }
+  }
+  for (const el of els) {
+    if (el.type !== "text") continue;
+    if ((el.height ?? 0) > 0 && (el.height ?? 0) < 8) {
+      warns.push(`${name}: text "${String(el.text ?? "").slice(0, 16)}" measured ${Math.round(el.height)}px tall — no rendered text is that small; this row of measurements is not trustworthy`);
+    }
+  }
+
   // ------- images are for the logo alone
   // A kit has hundreds of icons; embedding them means a base64 blob per icon
   // per colour, and a fixed raster inside a document whose point is that it

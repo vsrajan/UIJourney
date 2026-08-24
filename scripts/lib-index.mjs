@@ -108,6 +108,15 @@ export function lookupEntry(index, component, wanted = {}) {
       }
     }
     if (!ok) continue;
+    // For axes the caller did NOT ask about, prefer the entry that is
+    // literally the default. Without this every size scored the same and the
+    // first in document order won — which for a Badge listed xs-first meant a
+    // 4x4 square stretched across a table cell, i.e. a coloured hairline
+    // where a pill was expected.
+    for (const [k, v] of Object.entries(cand.axes)) {
+      if (k in want) continue;
+      if (v === "default") score += 1;
+    }
     score -= Object.keys(cand.axes).length * 0.01;
     if (score > bestScore) { bestScore = score; best = cand; }
   }
