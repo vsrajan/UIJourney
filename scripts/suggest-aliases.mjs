@@ -214,5 +214,16 @@ if (WRITE) {
   }
   writeFileSync(p, src.replace(re, block));
   console.log(`\nwrote ${chosen.length} alias(es) into scripts/icons.mjs`);
+
+  // The alias keys are normalised bases; a spec needs the kit's real export
+  // name, because that is what codegen imports. Record the mapping so the
+  // sketcher and the developer can both look it up.
+  const map = {};
+  for (const [base, shape, exports_] of chosen) {
+    map[shape] = { alias: base, exports: exports_.sort() };
+  }
+  const mapPath = join(REPO, "lib", "icon-map.json");
+  writeFileSync(mapPath, JSON.stringify({ package: PKG, icons: map }, null, 2) + "\n");
+  console.log(`wrote lib/icon-map.json — the export names to write in a spec`);
   console.log("Recompose and look at the picture — a wrong alias still validates.");
 }

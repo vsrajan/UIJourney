@@ -125,6 +125,26 @@ export function drawIcon(name, { x, y, size, color = "#1C1C1C", frameId = null, 
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // If the kit has been mapped, show the real export names — those are what a
+  // spec must contain, since codegen imports them verbatim.
+  const { existsSync, readFileSync } = await import("node:fs");
+  const { join, dirname, resolve } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const mapPath = join(resolve(dirname(fileURLToPath(import.meta.url)), ".."), "lib", "icon-map.json");
+  if (existsSync(mapPath)) {
+    const { package: pkg, icons } = JSON.parse(readFileSync(mapPath, "utf8"));
+    const rows = Object.entries(icons).sort(([a], [b]) => a.localeCompare(b));
+    const w = Math.max(...rows.map(([k]) => k.length));
+    console.log(`Icons available from ${pkg} — write one of these names in a spec:\n`);
+    console.log(`${"MEANING".padEnd(w)}  KIT EXPORT NAMES`);
+    for (const [shape, { exports }] of rows) console.log(`${shape.padEnd(w)}  ${exports.join(", ")}`);
+    console.log(
+      `\n${rows.length} mapped. Any other export of ${pkg} also works — it draws a named\n` +
+        "placeholder box and still carries the name through to codegen."
+    );
+    process.exit(0);
+  }
+
   const aliases = Object.entries(ALIASES);
   console.log(`${iconNames().length} drawn icon(s):\n`);
   console.log("  " + iconNames().join("\n  "));
