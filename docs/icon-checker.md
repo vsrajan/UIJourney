@@ -42,6 +42,53 @@ The last word is the search term, and it is a regular expression, so
 may be `IconFunnel`, a search icon `IconMagnifier`. Try two or three synonyms
 before concluding something is missing.
 
+### Searching for a whole screen at once
+
+Building the alias map for a screen means nine or ten of these. Paste the
+block, read the output, write the map:
+
+```bash
+for kw in 'funnel|filter' 'chevron|caret|angle' 'sort|updown|arrowup' \
+          'check|tick|success' 'close|cross|dismiss|cancel' \
+          'warn|alert|caution|attention' 'refresh|reload|sync|spin' \
+          'pause|stop|halt' 'more|ellipsis|dots|overflow'; do
+  echo "--- $kw"
+  node --input-type=module -e '
+    const m = await import("@uwr/icons");
+    const ns = { ...(m.default && typeof m.default === "object" ? m.default : {}), ...m };
+    const re = new RegExp(process.argv[1], "i");
+    const hits = Object.keys(ns).filter((k) => /^[A-Z]/.test(k) && re.test(k))
+      .map((k) => k.replace(/(12|16|24)px$/, ""));
+    console.log([...new Set(hits)].sort().map((s) => "    " + s).join("\n") || "    (none)");
+  ' "$kw"
+done
+```
+
+```
+--- funnel|filter
+    FilterFunnel
+--- chevron|caret|angle
+    ChevronDown
+    ChevronLeft
+    ChevronRight
+--- sort|updown|arrowup
+    SortArrows
+```
+
+The `.replace()` collapses the size family, so `FilterFunnel12px`,
+`FilterFunnel16px` and `FilterFunnel24px` appear once. Adjust it if the kit
+uses other sizes.
+
+Those nine keywords cover what a data-heavy screen needs — a filter control,
+pagination chevrons, a sortable header, and a glyph per status. Swap them for
+whatever the screen in front of you actually calls for.
+
+A concept that comes back `(none)` is worth noting: either the kit names it
+something the keywords missed, or it genuinely has no such icon, and the second
+is a finding for the design-system owners.
+
+### Why the default spread
+
 The spread over `m.default` is not decoration. These packages are usually
 CommonJS and expose their members through getters, which `cjs-module-lexer`
 cannot see — so a dynamic import leaves the named exports undefined and only
