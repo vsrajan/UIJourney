@@ -36,6 +36,10 @@ without the ceremony, so the developer can iterate on layout and copy first.
   firm's standard. Read it: it is what tells you to reach for `DataTable`
   rather than `Table` for an actionable list, and it is small.
 - `lib/typography.json` — the type scale tokens you may name.
+- `lib/icon-map.json` — the kit's icon export names, by meaning. Write one of
+  those names verbatim; it is what codegen imports. If the file is absent the
+  kit has not been mapped, so ask the developer for the icon's real name
+  rather than inventing one.
 - `docs/spec-schema.md` — the spec format.
 
 ## Steps
@@ -55,13 +59,17 @@ without the ceremony, so the developer can iterate on layout and copy first.
    Reach for a variant axis the same way: `props: { "size": "sm" }` selects
    the small Button, it is not decoration.
 
-   **Ask for icons with an icon node**, `{ "icon": "filter" }` — never a
+   **Ask for icons with an icon node**, `{ "icon": "MarkTick16px" }` — never a
    Unicode character. A `"▽"` standing in for a filter icon renders as text,
    may be missing from the font, and hands codegen a string where it needed a
-   component; the validator rejects it. `node scripts/icons.mjs` lists what is
-   drawn, and an unlisted name still works as a named placeholder. Pagination
-   controls are `chevron-left` / `chevron-right`, a sortable column header is
-   `sort`.
+   component; the validator rejects it.
+
+   Take the name from `lib/icon-map.json`, which lists the kit's real exports
+   against the meaning each one carries — `node scripts/icons.mjs` prints it
+   as a table. Write the export verbatim, at the size the slot wants: 16px in
+   a toolbar or a badge, 24px for a standalone control. A name that is not in
+   the map still works, drawing a named placeholder, so an unusual icon is
+   never a blocker.
 
    Two more things a screen usually wants that exist only if you ask:
    `"underline": true` marks the active nav item or selected tab with a rule

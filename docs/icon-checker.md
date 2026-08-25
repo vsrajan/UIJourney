@@ -224,6 +224,24 @@ If a name is rejected that you know is right, add the missing word to that
 concept's list in `CONCEPTS` — or, when the extra word is decoration rather
 than meaning (`Circle`, `Outlined`, `Bold`), to `QUALIFIERS`.
 
+`--write` also produces `lib/icon-map.json`, recording the kit's real export
+names against each meaning. That is the file a developer and the sketcher both
+read to answer "what do I write in a spec":
+
+```bash
+node scripts/icons.mjs
+```
+
+```
+MEANING          KIT EXPORT NAMES
+alert            WarningTriangle12px, WarningTriangle16px, WarningTriangle24px
+check            MarkTick12px, MarkTick16px, MarkTick24px
+filter           Filter12px, Filter16px, Filter24px
+```
+
+The alias keys are normalised bases (`marktick`); a spec needs the full export
+(`MarkTick16px`), because codegen imports it verbatim.
+
 `--write` replaces the `ALIASES` block in place. Recompose and look at the
 render afterwards; that is the only check that catches a plausible-but-wrong
 choice.
