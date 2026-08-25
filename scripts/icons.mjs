@@ -58,18 +58,32 @@ export const ALIASES = {
   // "iconfunnel": "filter",
 };
 
-const norm = (t) => String(t ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+// Kits commonly bake the pixel size into the export name — FilterFunnel12px,
+// FilterFunnel16px, FilterFunnel24px are one icon at three sizes. Strip it for
+// alias lookup so a single entry covers the family.
+const SIZE_SUFFIX = /[-_ ]?(\d{1,3})(px)?$/i;
+const norm = (t) => String(t ?? "").toLowerCase().replace(SIZE_SUFFIX, "").replace(/[\s_-]+/g, "");
+
+// The size the name itself declares, if any.
+export function sizeFromName(name) {
+  const m = SIZE_SUFFIX.exec(String(name ?? ""));
+  const n = m ? Number(m[1]) : NaN;
+  return Number.isFinite(n) && n >= 8 && n <= 64 ? n : null;
+}
 
 export const iconNames = () => Object.keys(ICONS).sort();
 
 // Returns Excalidraw elements for one icon. `stamp` and `nextId` come from the
 // caller so ids and seeds stay deterministic with the rest of the scene.
-export function drawIcon(name, { x, y, size = 16, color = "#1C1C1C", frameId = null, stamp, nextId }) {
+export function drawIcon(name, { x, y, size, color = "#1C1C1C", frameId = null, stamp, nextId }) {
   const raw = String(name ?? "");
   const kebab = raw.toLowerCase().replace(/[\s_]+/g, "-");
-  const key = ICONS[kebab] ? kebab : (ALIASES[norm(raw)] ?? kebab);
+  const key = ICONS[kebab] ? kebab : (ALIASES[norm(raw)] ?? ALIASES[kebab] ?? kebab);
   const shapes = ICONS[key];
-  const k = size / 16;
+  // An explicit size wins; otherwise honour what the name declares, so
+  // FilterFunnel24px is drawn at 24 without anyone restating it.
+  const drawn = size ?? sizeFromName(raw) ?? 16;
+  const k = drawn / 16;
   const common = {
     strokeColor: color, backgroundColor: "transparent", fillStyle: "solid",
     strokeWidth: 2, strokeStyle: "solid", roughness: 0, opacity: 100, angle: 0,
@@ -82,7 +96,7 @@ export function drawIcon(name, { x, y, size = 16, color = "#1C1C1C", frameId = n
     // name for codegen, which is the part that has to be exact.
     return [stamp({
       ...common, id: nextId("icon"), type: "rectangle",
-      x, y, width: size, height: size, roundness: { type: 3 },
+      x, y, width: drawn, height: drawn, roundness: { type: 3 },
       strokeColor: color, backgroundColor: "transparent",
     })];
   }

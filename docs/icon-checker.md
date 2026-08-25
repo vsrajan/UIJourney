@@ -72,6 +72,26 @@ find node_modules/@uwr -path '*react/icon/*' -name '*.d.ts' \
 
 Drop the final `grep` to get everything — but see the note about 1053.
 
+## Sizes baked into the name
+
+Many kits publish one export per icon **per size**:
+
+```
+FilterFunnel12px
+FilterFunnel16px
+FilterFunnel24px
+```
+
+Two things follow, both handled for you.
+
+One `ALIASES` entry covers the whole family — the trailing size is stripped
+before lookup, so `filterfunnel` matches all three.
+
+And the composer takes the size from the name: `FilterFunnel24px` is drawn at
+24px without restating it. An explicit `size` on the node still wins, which is
+what you want inside a badge or a dense toolbar where the kit's nominal size is
+too big for the slot.
+
 ## Two naming conventions, and which one to write
 
 The per-icon modules are usually **kebab-case** (`funnel`, `chevron-left`)
@@ -106,15 +126,16 @@ drawn shape in `ALIASES` at the top of `scripts/icons.mjs`:
 
 ```js
 export const ALIASES = {
-  iconfunnel: "filter",
-  iconmagnifier: "search",
-  iconcheckmark: "check",
+  filterfunnel: "filter",
+  magnifier: "search",
+  checkmark: "check",
 };
 ```
 
-Keys are matched loosely, so `IconFunnel`, `icon-funnel` and `Icon Funnel` all
-resolve, and `customData.props.icon` still records exactly what the spec asked
-for.
+Keys are matched loosely — case, separators and any trailing size are all
+ignored, so `FilterFunnel16px`, `filter-funnel-24px` and `Filter Funnel` reach
+the same entry — and `customData.props.icon` still records exactly what the
+spec asked for.
 
 Do not expect a script to build this map. `IconFunnel` → `filter` and
 `IconMagnifier` → `search` are semantic matches, not textual ones, so it is a
