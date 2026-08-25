@@ -192,6 +192,13 @@ export const ALIASES = {
 //   filter: chose filterlist, also plausible filterfunnel
 ```
 
+A rival that is the chosen name plus only style words — `MarkTickBold` against
+`MarkTick` — is the same icon at another weight, not a competing choice, so it
+is not reported. The regular weight is preferred; if the kit's bold variant is
+the one your screens use, write that export name in the spec and the alias
+still resolves, because the size and style suffixes are stripped before
+lookup.
+
 **Read the CHECK THESE section.** The matching is a synonym table plus a
 scoring heuristic, and it cannot know that your kit's funnel is the filter
 control while its list icon is something else. A wrong alias produces a wrong

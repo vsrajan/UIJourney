@@ -144,8 +144,22 @@ for (const shape of Object.keys(ICONS).sort()) {
   if (!ranked.length) { missing.push([shape, "nothing in the kit matched"]); continue; }
   const [base, top] = ranked[0];
   chosen.push([base, shape, byBase.get(base)]);
-  const rivals = ranked.slice(1, 4).filter(([, s]) => top - s < 12);
-  if (rivals.length) ambiguous.push([shape, base, rivals.map(([b]) => b)]);
+  // A rival that is the chosen name plus only style words — MarkTickBold
+  // against MarkTick — is the same icon at another weight, not a different
+  // choice. Flagging those buries the ties that need a human.
+  const chosenWords = new Set(words(byBase.get(base)[0]));
+  const sameIconDifferentStyle = (rival) => {
+    const rw = words(byBase.get(rival)[0]);
+    const extra = rw.filter((w) => !chosenWords.has(w));
+    const missing = [...chosenWords].filter((w) => !rw.includes(w));
+    return extra.every((w) => QUALIFIERS.has(w)) && missing.every((w) => QUALIFIERS.has(w));
+  };
+  const rivals = ranked
+    .slice(1, 6)
+    .filter(([, s]) => top - s < 12)
+    .map(([b]) => b)
+    .filter((b) => !sameIconDifferentStyle(b));
+  if (rivals.length) ambiguous.push([shape, base, rivals]);
 }
 
 const block =
