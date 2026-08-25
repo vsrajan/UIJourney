@@ -155,6 +155,36 @@ what codegen imports. The composer reports which names fell back, so adding a
 shape to `scripts/icons.mjs` is a deliberate choice rather than something you
 discover from the picture.
 
+**Use your kit's icon names, not the drawn set's.** The name in the spec is
+what `journey-coder` imports, so it has to be the real one. To get a drawing
+as well, map it in `ALIASES` at the top of `scripts/icons.mjs`:
+
+```js
+export const ALIASES = {
+  iconcheckmark: "check",
+  iconmagnifier: "search",
+};
+```
+
+Keys are matched loosely, so `IconCheckmark`, `icon-checkmark` and
+`Icon Checkmark` all hit the same entry, and `props.icon` still records
+exactly what the spec asked for.
+
+To draw a glyph that has no equivalent, add it to `ICONS` on a 16x16 grid
+using three primitives — `P(...)` for a polyline, `E(x,y,w,h)` for an ellipse,
+`R(x,y,w,h)` for a rectangle:
+
+```js
+"cloud-upload": [
+  P([3, 11], [3, 8], [6, 6], [10, 6], [13, 9], [13, 11]),   // cloud underside
+  P([8, 14], [8, 8]), P([5.5, 10.5], [8, 8], [10.5, 10.5]), // arrow
+],
+```
+
+Coordinates come from the real SVG: divide a 24x24 viewBox by 1.5, a 20x20 by
+1.25. Curves have to be approximated as short straight runs — at 16px nobody
+can tell. `node scripts/icons.mjs` lists everything drawn and every alias.
+
 **Never use a Unicode symbol as an icon.** A `"▽"` or `"‹"` in a text node
 renders as text, may be missing from the font, and gives codegen a string
 where it needed a component — `validate-scene.mjs` rejects it. Table cell

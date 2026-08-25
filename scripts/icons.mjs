@@ -47,12 +47,27 @@ export const ICONS = {
   alert:           [P([8, 2], [15, 14], [1, 14], [8, 2]), P([8, 6.5], [8, 10]), P([8, 11.8], [8, 12.2])],
 };
 
+// Your kit's icon names are the ones codegen must import, and they will not
+// match the generic names above. Map them here and a spec can use the kit's
+// real name while still getting a drawn glyph instead of a placeholder box.
+// Keys are normalised (lowercased, punctuation stripped), so "IconCheckmark",
+// "icon-checkmark" and "Icon Checkmark" all match the same entry.
+export const ALIASES = {
+  // "iconcheckmark": "check",
+  // "iconmagnifier": "search",
+  // "iconfunnel": "filter",
+};
+
+const norm = (t) => String(t ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+
 export const iconNames = () => Object.keys(ICONS).sort();
 
 // Returns Excalidraw elements for one icon. `stamp` and `nextId` come from the
 // caller so ids and seeds stay deterministic with the rest of the scene.
 export function drawIcon(name, { x, y, size = 16, color = "#1C1C1C", frameId = null, stamp, nextId }) {
-  const key = String(name ?? "").toLowerCase().replace(/[\s_]+/g, "-");
+  const raw = String(name ?? "");
+  const kebab = raw.toLowerCase().replace(/[\s_]+/g, "-");
+  const key = ICONS[kebab] ? kebab : (ALIASES[norm(raw)] ?? kebab);
   const shapes = ICONS[key];
   const k = size / 16;
   const common = {
@@ -96,5 +111,16 @@ export function drawIcon(name, { x, y, size = 16, color = "#1C1C1C", frameId = n
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  console.log(iconNames().join("\n"));
+  const aliases = Object.entries(ALIASES);
+  console.log(`${iconNames().length} drawn icon(s):\n`);
+  console.log("  " + iconNames().join("\n  "));
+  if (aliases.length) {
+    console.log(`\n${aliases.length} kit alias(es):\n`);
+    for (const [from, to] of aliases) console.log(`  ${from} -> ${to}`);
+  }
+  console.log(
+    "\nAny other name still works: it becomes a named placeholder box that keeps\n" +
+      "customData.props.icon for codegen. Add a shape to ICONS to draw it, or an\n" +
+      "entry to ALIASES to point your kit's name at a shape that already exists."
+  );
 }
