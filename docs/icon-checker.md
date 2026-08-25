@@ -50,18 +50,46 @@ it asked Playwright where its browser was.
 
 ## 3. If the runtime import fails
 
-Some packages are ESM-only or need a build step. Read the type declarations
-instead. **Scan the whole scope** — types are often in a sibling package and a
-nested path (`@uwr/rt/react/icon/`, not `@uwr/icons/`), so do not guess a
-directory:
+Some packages are ESM-only or need a build step. Fall back to the files — but
+**enumerate by path, not by declaration**. These packages usually ship one
+module per icon, and every one of those modules declares the same anonymous
+symbol:
+
+```
+declare const svg: React.FC<React.SVGProps<React.ReactSVGElement>>;
+export default svg;
+```
+
+Grepping declarations therefore returns `svg` a thousand times. The identity is
+in the directory name. Scan the whole scope, since the modules commonly live in
+a sibling package at a nested path (`@uwr/rt/react/icon/`, not `@uwr/icons/`):
 
 ```bash
-find node_modules/@uwr -name '*.d.ts' -print0 \
-  | xargs -0 grep -hoE "export (declare )?(const|function) [A-Z][A-Za-z0-9_]*" \
-  | awk '{print $NF}' | sort -u | grep -iE "funnel|filter"
+find node_modules/@uwr -path '*react/icon/*' -name '*.d.ts' \
+  | sed -E 's#.*/react/icon/##; s#/index\.d\.ts$##; s#\.d\.ts$##' \
+  | sort -u | grep -iE "funnel|filter"
 ```
 
 Drop the final `grep` to get everything — but see the note about 1053.
+
+## Two naming conventions, and which one to write
+
+The per-icon modules are usually **kebab-case** (`funnel`, `chevron-left`)
+while the barrel re-exports them **PascalCase** (`IconFunnel`,
+`IconChevronLeft`). Both name the same icon, and a spec must use whichever form
+the kit's own code imports, because `journey-coder` reproduces it.
+
+Settle it by reading a real import rather than guessing:
+
+```bash
+grep -rhE "^import .*(icon|Icon)" src/components/ui/ | sort -u | head
+```
+
+A named import from a barrel (`import { IconFunnel } from "@uwr/icons"`) means
+write `IconFunnel`. A default deep import
+(`import Funnel from "@uwr/rt/react/icon/funnel"`) means write `funnel`, and
+codegen has to emit the deep path — a barrel import it invented would not
+resolve.
 
 ## What the list does not tell you
 

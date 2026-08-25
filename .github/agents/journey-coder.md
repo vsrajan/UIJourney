@@ -35,7 +35,19 @@ An element with `customData.props.icon` names a kit icon the mockup drew from
 primitives. The glyph in the scene is a wireframe stand-in; **the name is the
 contract**. Emit the real icon component from the kit's icon package.
 
-How it is passed depends on the component. Check the source before assuming:
+**Read a real import before writing one.** A firm icon package commonly offers
+both a barrel of PascalCase named exports and one kebab-case module per icon,
+and only one of them is what this kit uses:
+
+```bash
+grep -rhE "^import .*(icon|Icon)" src/components/ui/ | sort -u | head
+```
+
+`import { IconFunnel } from "@uwr/icons"` and
+`import Funnel from "@uwr/rt/react/icon/funnel"` are both plausible; inventing
+the wrong one produces an import that does not resolve.
+
+How the icon is passed depends on the component. Check the source before assuming:
 a component that renders `children` (a `span`, or a Radix `Slot.Root` under
 `asChild`) takes the icon as its first child —
 
