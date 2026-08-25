@@ -171,7 +171,9 @@ runs there.
      `.uijourney-tools/` sandbox — never into your kit's `package.json`)
    - `.gitignore` (merge its two entries into yours; `.uijourney-tools/`
      must stay untracked)
-   - `docs/spec-schema.md` (the screen-spec format the agents write)
+   - `docs/spec-schema.md` (the screen-spec format the agents write) and
+     `docs/icon-checker.md` (finding your kit's icon names and giving them
+     drawings)
    - `lib/typography.json` (the UDS type scale — **verify its values against
      your standards doc before the first library build**; it is transcribed
      from prose, not extracted from CSS) and `lib/skips.json` (the declared
