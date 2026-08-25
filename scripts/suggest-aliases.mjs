@@ -185,10 +185,31 @@ if (missing.length) {
 
 if (WRITE) {
   const p = join(REPO, "scripts", "icons.mjs");
+  if (!existsSync(p)) {
+    console.error(`\nERROR: ${p} not found — run this from the repo root.`);
+    process.exit(1);
+  }
   const src = readFileSync(p, "utf8");
-  const re = /export const ALIASES = \{[\s\S]*?\n\};/;
+  // Tolerant of CRLF and of the block having been reflowed onto one line.
+  const re = /export\s+const\s+ALIASES\s*=\s*\{[\s\S]*?\}\s*;/;
   if (!re.test(src)) {
-    console.error("\nERROR: could not find the ALIASES block in scripts/icons.mjs — paste it by hand.");
+    // The identifier appears in drawIcon's lookup regardless, so test for the
+    // declaration — otherwise an old file reports as "reformatted".
+    if (!/export\s+const\s+ALIASES/.test(src)) {
+      console.error(
+        "\nERROR: scripts/icons.mjs has no ALIASES block at all.\n" +
+          "That file predates alias support. Copy the current one from the UIJourney\n" +
+          "template alongside this script — they are a matched pair — then re-run:\n" +
+          "    cp <template>/scripts/icons.mjs scripts/\n" +
+          "    node scripts/suggest-aliases.mjs --write"
+      );
+    } else {
+      console.error(
+        "\nERROR: found the word ALIASES in scripts/icons.mjs but not a block this\n" +
+          "script can replace — it may have been reformatted. Paste the block above\n" +
+          "over the existing `export const ALIASES = { ... };` by hand."
+      );
+    }
     process.exit(1);
   }
   writeFileSync(p, src.replace(re, block));
