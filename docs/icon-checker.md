@@ -164,6 +164,48 @@ resolve.
 look like without rendering. If the kit has Storybook, that is the fastest way
 to eyeball them. Otherwise judge by name and check the rendered mockup.
 
+## Generating the alias map
+
+`scripts/suggest-aliases.mjs` does the whole job: it imports the kit's icon
+package, matches every export against the shapes UIJourney can draw, and emits
+the `ALIASES` block.
+
+```bash
+node scripts/suggest-aliases.mjs                  # print it
+node scripts/suggest-aliases.mjs --write          # patch scripts/icons.mjs
+node scripts/suggest-aliases.mjs --package @acme/icons
+```
+
+```
+export const ALIASES = {
+  filterfunnel: "filter",
+  magnifier: "search",
+  checkmark: "check",
+  ...
+};
+
+// 22 alias(es) from 131 kit icon(s) in @uwr/icons
+//   checkmark -> check   (Checkmark12px, Checkmark16px, Checkmark24px)
+//   ...
+
+// CHECK THESE — another export scored nearly as well:
+//   filter: chose filterlist, also plausible filterfunnel
+```
+
+**Read the CHECK THESE section.** The matching is a synonym table plus a
+scoring heuristic, and it cannot know that your kit's funnel is the filter
+control while its list icon is something else. A wrong alias produces a wrong
+picture that still validates, which is the failure this whole pipeline is
+built to avoid — so the script reports every near-tie rather than quietly
+picking one.
+
+Anything with no match at all is listed too, and stays a named placeholder
+until you add a shape to `ICONS` or a synonym to `CONCEPTS`.
+
+`--write` replaces the `ALIASES` block in place. Recompose and look at the
+render afterwards; that is the only check that catches a plausible-but-wrong
+choice.
+
 ## Turning names into drawings
 
 `node scripts/icons.mjs` lists what UIJourney draws and every alias configured.

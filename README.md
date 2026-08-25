@@ -162,7 +162,8 @@ runs there.
      (self-testing: `node scripts/placeholder-text.mjs --selftest`),
      `doctor.mjs` (checks this machine can render the kit before a
      librarian run), `icons.mjs` (`node scripts/icons.mjs` lists the drawn
-     icon set). `node scripts/lib-index.mjs [Component]` answers "what does
+     icon set), `suggest-aliases.mjs` (matches the kit's icon exports onto
+     drawable shapes). `node scripts/lib-index.mjs [Component]` answers "what does
      my kit actually have?" — components, their variant axes, and the fills
      each variant uses.
      Plain Node, no dependencies
