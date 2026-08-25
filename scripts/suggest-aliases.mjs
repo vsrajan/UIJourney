@@ -58,6 +58,17 @@ const norm = (s) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 
+// The name split into its component words. Matching has to respect these:
+// raw substring matching made "add" hit "Address", and every near-tie it
+// reported ("addfilter", "addcomment", "addpillar3") was equally wrong.
+const words = (s) =>
+  String(s)
+    .replace(/^Icon/, "")
+    .replace(/[-_ ]?\d{1,3}(px)?$/i, "")
+    .split(/(?=[A-Z])|[-_ ]+/)
+    .map((w) => w.toLowerCase().replace(/[^a-z0-9]/g, ""))
+    .filter(Boolean);
+
 async function kitIcons() {
   let ns;
   try {
@@ -83,19 +94,37 @@ async function kitIcons() {
   return byBase;
 }
 
-// Higher is better; 0 means no match at all. Exact beats prefix beats contains,
-// and a shorter name beats a longer one carrying extra qualifiers
-// (Checkmark over CheckmarkCircleOutlined).
-function score(base, terms) {
+// Shape and style words that qualify an icon without changing what it means.
+// They must not count against a name's coverage: WarningTriangle is still a
+// warning, SortArrows is still a sort.
+const QUALIFIERS = new Set([
+  "triangle", "circle", "square", "round", "rounded", "box", "outline",
+  "outlined", "filled", "solid", "line", "alt", "bold", "light", "small",
+  "large", "arrows", "arrow", "icon", "symbol", "sign", "mark",
+]);
+
+// Higher is better; 0 means no match.
+//
+// A term must be the whole name or one of its words — never a bare substring,
+// which is how "add" reached "Address". And a compound name only counts if the
+// concept explains ALL of it: FilterFunnel is filter+funnel, both synonyms of
+// the same idea, whereas AddFilter is add+filter, where "filter" belongs to a
+// different concept entirely and the icon means "add a filter", not "+".
+function score(base, ws, terms) {
   let best = 0;
+  const known = new Set(terms);
   for (const [i, t] of terms.entries()) {
     const weight = 1 - i * 0.06;               // earlier synonyms are stronger
     let s = 0;
-    if (base === t) s = 100;
-    else if (base.startsWith(t)) s = 70;
-    else if (base.endsWith(t)) s = 55;
-    else if (base.includes(t)) s = 40;
-    if (s) best = Math.max(best, s * weight - Math.max(0, base.length - t.length) * 0.4);
+    if (base === t) s = 100;                   // MoreHorizontal vs "morehorizontal"
+    else if (ws.length === 1 && ws[0] === t) s = 95;
+    else if (ws.includes(t)) {
+      // Every other word must be a synonym of this same concept or a generic
+      // qualifier, or the name is about something else.
+      const unexplained = ws.filter((w) => w !== t && !known.has(w) && !QUALIFIERS.has(w));
+      s = unexplained.length ? 0 : 60 - 8 * (ws.length - 1);
+    }
+    if (s > 0) best = Math.max(best, s * weight);
   }
   return best;
 }
@@ -108,8 +137,8 @@ const missing = [];
 for (const shape of Object.keys(ICONS).sort()) {
   const terms = CONCEPTS[shape];
   if (!terms) { missing.push([shape, "no synonyms defined"]); continue; }
-  const ranked = [...byBase.keys()]
-    .map((b) => [b, score(b, terms)])
+  const ranked = [...byBase.entries()]
+    .map(([b, exports_]) => [b, score(b, words(exports_[0]), terms)])
     .filter(([, s]) => s > 0)
     .sort((a, b) => b[1] - a[1]);
   if (!ranked.length) { missing.push([shape, "nothing in the kit matched"]); continue; }

@@ -199,8 +199,23 @@ picture that still validates, which is the failure this whole pipeline is
 built to avoid — so the script reports every near-tie rather than quietly
 picking one.
 
-Anything with no match at all is listed too, and stays a named placeholder
-until you add a shape to `ICONS` or a synonym to `CONCEPTS`.
+Anything with no match at all is listed too:
+
+```
+// No match; these stay as named placeholders until a shape or synonym is added:
+//   plus — nothing in the kit matched
+```
+
+That is a real answer, not a failure. Matching requires the concept to explain
+the **whole** name: `FilterFunnel` is filter + funnel, both the same idea, so it
+matches; `AddFilter` is add + filter, where `filter` belongs to a different
+concept and the icon means "add a filter" rather than "+", so it does not. A
+kit with no bare `Plus` or `Add` genuinely has no plus icon, and saying so
+beats aliasing `AddFilter` and rendering the wrong glyph.
+
+If a name is rejected that you know is right, add the missing word to that
+concept's list in `CONCEPTS` — or, when the extra word is decoration rather
+than meaning (`Circle`, `Outlined`, `Bold`), to `QUALIFIERS`.
 
 `--write` replaces the `ALIASES` block in place. Recompose and look at the
 render afterwards; that is the only check that catches a plausible-but-wrong
