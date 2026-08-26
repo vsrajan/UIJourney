@@ -199,6 +199,85 @@ add(
     : "install Chromium, or set UIJOURNEY_CHROMIUM to its path — do not run `npx playwright install`, that download is often blocked"
 );
 
+// ------------------------------------------------- codegen gate (advisory)
+// journey-coder finishes only when the repo's lint and typecheck pass, and it
+// is forbidden to disable a rule to get there. Nothing before step 7
+// established whether the repo can run either, so a pilot run reported "no
+// flat config, this is a genuine blocker" and generated the screens anyway.
+//
+// These rows deliberately do NOT affect the exit code: this script's exit
+// gates excalidraw-librarian, and a repo with no lint setup can still be
+// measured. They tell you whether guardrails-engineer has work to do first.
+const notes = [];
+const note = (ok, name, detail, fix) => notes.push({ ok, name, detail, fix });
+
+const pkgJson = (() => {
+  try {
+    return JSON.parse(readFileSync(join(REPO, "package.json"), "utf8"));
+  } catch {
+    return {};
+  }
+})();
+const scripts = pkgJson.scripts ?? {};
+const flat = ["js", "mjs", "cjs", "ts", "mts", "cts"]
+  .map((e) => `eslint.config.${e}`)
+  .filter((f) => existsSync(join(REPO, f)));
+const legacy = readdirSync(REPO).filter((f) => f.startsWith(".eslintrc"));
+if (pkgJson.eslintConfig) legacy.push("package.json#eslintConfig");
+const eslintVersion = (() => {
+  try {
+    const p = require.resolve("eslint/package.json", { paths: [REPO, join(REPO, "node_modules")] });
+    return JSON.parse(readFileSync(p, "utf8")).version;
+  } catch {
+    return null;
+  }
+})();
+const eslintMajor = eslintVersion ? Number(eslintVersion.split(".")[0]) : 0;
+
+// The three cases that all look like "no flat config" from the outside. The
+// middle one is the trap: ESLint 9 ignores .eslintrc unless
+// ESLINT_USE_FLAT_CONFIG=false, so it reports a configured repo as unconfigured.
+if (flat.length) {
+  note(true, "eslint config", flat.join(", "), "");
+} else if (legacy.length && eslintMajor >= 9) {
+  note(
+    false,
+    "eslint config",
+    `${legacy.join(", ")} — ESLint ${eslintVersion} ignores this`,
+    "the repo is mid-migration, not unconfigured. Migrating the firm's lint setup is\n" +
+      "       not a side effect a compliance task gets to have — ask the maintainers before\n" +
+      "       guardrails-engineer touches it. See docs/lint-checker.md."
+  );
+} else if (legacy.length) {
+  note(true, "eslint config", `${legacy.join(", ")} (legacy, ESLint ${eslintVersion})`, "");
+} else {
+  note(
+    false,
+    "eslint config",
+    eslintVersion ? `none — ESLint ${eslintVersion} installed but never configured` : "none, and ESLint is not installed",
+    "bare repo: guardrails-engineer must introduce a base flat config before it can layer\n" +
+      "       the UDS rules on it, which means adding devDependencies to the firm's repo.\n" +
+      "       See docs/lint-checker.md."
+  );
+}
+
+const lintScript = scripts.lint ?? scripts["lint:js"] ?? null;
+note(
+  Boolean(lintScript),
+  "lint script",
+  lintScript ? `npm run lint -> ${lintScript}` : "none",
+  'journey-coder runs "the repo\'s lint" and needs something to run. guardrails-engineer\n' +
+    "       should add scripts.lint alongside the uijourney-compliance CI job."
+);
+
+const tsScript = scripts.typecheck ?? scripts["type-check"] ?? null;
+note(
+  Boolean(tsScript) || resolves("typescript"),
+  "typecheck",
+  tsScript ? `npm run ${scripts.typecheck ? "typecheck" : "type-check"}` : resolves("typescript") ? "no script, but tsc is available" : "none",
+  "add scripts.typecheck (tsc --noEmit) — the kit's own types are what catch invented props"
+);
+
 // ---------------------------------------------------------------- report
 const width = Math.max(...rows.map((r) => r.name.length));
 for (const r of rows) {
@@ -224,4 +303,17 @@ if (failed.length) {
     console.log("  Playwright resolves its own bundled browser — do NOT pass executablePath.");
   }
 }
+// Advisory, printed last so it never reads as a reason not to run the librarian.
+const noteWidth = Math.max(...notes.map((n) => n.name.length));
+console.log("\nCodegen readiness (advisory — does not block excalidraw-librarian):");
+for (const n of notes) {
+  console.log(`  ${n.ok ? "ok  " : "TODO"}  ${n.name.padEnd(noteWidth)}  ${n.detail}`);
+}
+const todo = notes.filter((n) => !n.ok);
+if (todo.length) {
+  console.log("\n  journey-coder cannot verify its output until these exist:");
+  for (const n of todo) console.log(`    ${n.name}\n      -> ${n.fix}`);
+  console.log("\n  Run guardrails-engineer (step 4) before journey-coder (step 7).");
+}
+
 process.exit(failed.length ? 1 : 0);

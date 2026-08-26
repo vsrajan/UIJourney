@@ -435,6 +435,9 @@ names; what a spec must contain, since codegen imports it verbatim) ·
 2b. node scripts/doctor.mjs                                        ← must pass
                              Can this machine render the kit? If not,
                              fix the environment or use the lite path.
+                             Its Codegen readiness section is advisory and
+                             does not gate the librarian — it tells you whether
+                             step 4 has a base config to build on.
 2c. node scripts/suggest-aliases.mjs --write → icons.mjs ALIASES,
                              lib/icon-map.json                    ← commit
                              Read its CHECK THESE list; the ties are
