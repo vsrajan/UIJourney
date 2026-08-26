@@ -6,8 +6,8 @@ The reasoning matters more than the file list: most of the hard-won
 knowledge here was discovered by hitting a wall, and without it the same
 walls get rebuilt.
 
-Repo: `github.com/vsrajan/UIJourney` (template). Last commit at time of
-writing: the logo run-order documentation.
+Repo: `github.com/vsrajan/UIJourney` (template). Current through the icon
+work — `lib/icon-map.json` and the sketcher reading it.
 
 ---
 
@@ -91,6 +91,16 @@ authoring geometry. None of them are reachable from a spec.
 - Standards-doc drift found: `bronze80` should be `#725717` (the doc's value
   is actually `bronze90`); button heights are 24/28/32/36px, not the doc's
   24/32/36/40; `lagoon50` (`#268FB5`) exists in CSS but not the doc.
+- **`Badge` has a real semantic variant set** — `default, info, success,
+  error, warning, outline, emphasis, primary, secondary` — and a `size` axis
+  `xs, sm, default, md, lg`. Good vocabulary for a status column; the fills
+  are `*10` tints and the text is uniformly dark, so colour alone does not
+  scan at 100%.
+- **The icon package is `@uwr/icons`, ~1053 exports**, PascalCase with the
+  pixel size in the name (`FilterFunnel12px/16px/24px`), no `Icon` prefix.
+  Type declarations live in a sibling package at a nested path
+  (`@uwr/rt/react/icon/`), one module per icon, each declaring an anonymous
+  `const svg` — so enumerate by path, never by declaration.
 - The doc's diff script reported 139 "undocumented primitives" that were
   almost all a **name-format mismatch** (`--ubs-neutral10` vs `neutral10:`).
   Normalize before comparing — a report where 139 of 143 issues are noise
@@ -276,6 +286,81 @@ run inside the firm repo but most of what they run is template-owned, so any
 local edit to shared tooling is a fix with an expiry date. Anything that
 should stay fixed has to go upstream.*
 
+**Document order decided things that needed a decision.** Two separate bugs,
+one lesson. (a) `lookupEntry` scored every candidate that satisfied the
+requested axes identically, and `score > bestScore` is strictly greater, so
+the first entry in the library won. A Badge listed `xs, sm, default, md, lg`
+therefore resolved to `xs` — 4x4 — whenever a spec named only a variant, and
+stretched across a table cell that renders as a coloured hairline behind its
+own label. (b) `buildIndex` took the *first* element carrying a component tag
+as the anchor — the element the composer positions and resizes — so a glyph
+listing a decorative bar ahead of its pill anchored on the bar. Fixes: an
+unrequested axis now scores a point for being `default`, and the anchor is
+the largest shape in the item. *Lesson: when several candidates satisfy a
+query equally, the tie is a decision someone has to make; leaving it to array
+order means the library's authoring sequence silently becomes design intent.*
+
+**Measured geometry that was never laid out.** The kit's Badge came back as
+`xs` 4x4 containing "4x4" text, and `sm` 8x8. No rendered text is 4px tall —
+the harness read those elements before they had laid out (collapsed, hidden,
+or fonts unsettled). The numbers looked like data and were noise, and the
+axis-default fix above only stops us *reaching* them by accident. Fix:
+`validate-lib.mjs` warns when an anchor is under 10px in either dimension or
+a text element under 8px tall. *Lesson: a measurement pipeline needs a
+plausibility floor, because "measured" is a claim about a process, not a
+guarantee about a number.*
+
+**Named exports missing from a CommonJS dynamic import.** Twice. `doctor.mjs`
+asked Playwright where its browser was and always got nothing: `playwright`,
+`playwright-core` and `@playwright/test` expose `chromium` through a getter,
+which `cjs-module-lexer` cannot see, so `const { chromium } = await import(...)`
+is `undefined` and only `default` holds the real object. The optional chaining
+meant to be defensive turned that into a silent fallthrough to path-guessing,
+and a correctly provisioned machine failed the check. Separately, a one-liner
+using `require("./lib/uds.excalidrawlib")` tried to *execute* the library as
+JavaScript — `require` only parses `.json` — and died on the first colon.
+Fixes: read `ns.chromium ?? ns.default?.chromium`; read and `JSON.parse` a
+non-`.json` file. *Lesson: `await import()` of a CommonJS package is not the
+same shape as `require()` of it, and `?.` on the result hides that rather than
+guarding it.*
+
+**The spec had no way to say it, so the agent said something else.** A
+request for "a small filter icon" became the Unicode character `▽` in a text
+element; pagination became `‹` `›`; sortable headers `↕`. The sketcher was not
+wrong — the spec language had no icon primitive at all, so the request
+degraded into the nearest thing that looked right, and one that renders as
+text, may be missing from the font, and hands codegen a string where it needs
+a component. The same shape recurred with `scroll: "both"`, which was accepted
+and drew only the vertical rail. Fixes: `scripts/icons.mjs` draws 22 icons from
+primitives and `{ "icon": ... }` is a real node; `props.icon` draws inside a
+component; scroll direction is honoured on both axes; a lone symbol character
+used as an icon is a validation error; and — the general cure — the composer
+reports every layout-node key it did not act on. *Lesson: the earlier lesson
+was that a spec must not silently accept fields it does not act on. Its
+converse is worse: a spec that cannot express something at all gets a
+plausible substitute, and the substitute is what ships.*
+
+**Right horizontally, wrong vertically.** Substituting a bound label
+recomputed its width but never its height, and the centring step used both —
+so labels were always horizontally centred and vertically correct only if the
+library happened to store an accurate text height. A glyph whose text box was
+authored the full height of its container gave `(h - h) / 2 = 0` and pinned
+every label to the top. Fix: derive the text box from font size, line height
+and line count before centring. *Lesson: an asymmetry in a symmetric operation
+is a strong signal — one axis working and the other not means the two are not
+computed from the same source.*
+
+**Substring matching put `add` inside `address`.** The alias generator matched
+concept synonyms as raw substrings, so `plus` resolved to `Address`, and every
+alternative it offered — `AddFilter`, `AddComment`, `AddPillar3` — was equally
+wrong. Fixes: match camelCase words rather than substrings, and require the
+concept to explain the *whole* name — `FilterFunnel` is filter + funnel, two
+words for one idea, while `AddFilter` is add + filter, where `filter` belongs
+to another concept and the icon means "add a filter". A kit with no bare
+`Plus` now reports no match. *Lesson: for a suggestion tool, a confident wrong
+answer costs more than an admitted gap, because the wrong one gets accepted
+and the gap gets fixed.*
+
 ---
 
 ## 6. What exists now
@@ -286,7 +371,8 @@ should stay fixed has to go upstream.*
 |---|---|
 | `standards-curator` | Cleans the prose standard; locates token CSS; emits `docs/component-notes.json` ("use when" per component) |
 | `design-data-extractor` | `tokens.json`, `component-manifest.json` (recursive glob, `role`/`partOf`, `compoundVariants`), standards diff, manifest-shrink check |
-| `excalidraw-librarian` | Measures variants, builds `uds.excalidrawlib` + `index.json` + `CATALOG.md`; anatomy contract; force-open overlays |
+| `excalidraw-librarian` | Measures variants, builds `uds.excalidrawlib` + `index.json` + `CATALOG.md`; anatomy contract; force-open overlays; runs `doctor.mjs` first and refuses to start if it fails |
+| `excalidraw-librarian-lite` | Same library with geometry **derived** from Tailwind classes, for when the kit will not build. Refuses to run if `doctor.mjs` passes |
 | `guardrails-engineer` | UDS lint rules + `uijourney-compliance` GitLab CI job |
 | `journey-sketcher` | **Lite:** story → `spec.json` → compose → PNG preview. Seconds per iteration, no MR |
 | `journey-designer` | Spec → validated scene → draft MR. Rules stated verbatim so it never reads validator source |
@@ -294,29 +380,42 @@ should stay fixed has to go upstream.*
 
 ### Scripts (`scripts/`) — plain Node, no deps except Playwright for PNG
 
-`validate-lib.mjs` · `validate-scene.mjs` · `diff-manifest.mjs` ·
-`embed-logo.mjs` · `compose-scene.mjs` · `render-scene.mjs` ·
-`build-catalog.mjs` · `ensure-parser.mjs` (isolated `ts-morph` bootstrap for
-the extractor; installs into gitignored `.uijourney-tools/`) ·
-`validate-manifest.mjs` (manifest + tokens vs kit source; walks
-`src/components/ui/**` independently of the extractor so a discovery bug
-cannot hide behind the extractor's own glob) · `tailwind-metrics.mjs` (class→pixel
-table for the lite librarian) · `lib-index.mjs` (axis-aware library index
-shared by composer and validator so the two cannot disagree)
+**Pipeline** — `compose-scene.mjs` (spec → scene: layout, table synthesis,
+icons, scrollbars, underlines, glyph-scaffolding removal, inert-key
+reporting) · `render-scene.mjs` (faithful preview) · `validate-scene.mjs` ·
+`validate-lib.mjs` · `validate-manifest.mjs` · `diff-manifest.mjs` ·
+`build-catalog.mjs` · `embed-logo.mjs`
+
+**Shared logic, extracted so two consumers cannot drift** —
+`lib-index.mjs` (axis-aware library index used by composer *and* validator;
+also `node scripts/lib-index.mjs [Component]` to inspect what the kit has) ·
+`placeholder-text.mjs` (glyph scaffolding rules, `--selftest` with 27 cases
+in both directions) · `icons.mjs` (22 drawn icons + kit `ALIASES`) ·
+`tailwind-metrics.mjs` (class→pixel table for the lite librarian)
+
+**Environment** — `doctor.mjs` (can this machine render the kit? node_modules,
+React, a harness, every package the kit's components import, Playwright, a
+Chromium binary — and prints the exact `chromium.launch()` call to use) ·
+`ensure-parser.mjs` (isolated `ts-morph` in a gitignored `.uijourney-tools/`) ·
+`suggest-aliases.mjs` (matches the kit's icon exports onto drawable shapes;
+`--write` patches `icons.mjs` and emits `lib/icon-map.json`)
 
 ### Committed data (`lib/`, `docs/`)
 
 `typography.json` (UDS type scale, prose-sourced, **verify by hand**) ·
 `skips.json` (declared coverage gaps; `$`-prefixed keys are comments) ·
-`docs/spec-schema.md`
+`docs/spec-schema.md` (the spec language: nodes, variant axes, icons, tables,
+underlines, and the rule that nothing outside the spec survives a compose) ·
+`docs/icon-checker.md` (finding the kit's icon names and mapping them)
 
 ### Generated into the firm repo, not copied from the template
 
 `data/tokens.json` · `data/component-manifest.json` ·
 `data/measurements.json` · `data/extraction-report.md` ·
 `lib/uds.excalidrawlib` · `lib/index.json` · `lib/CATALOG.md` ·
-`lib/logo.json` · `docs/uds-standards.md` · `docs/token-source.md` ·
-`docs/component-notes.json`
+`lib/logo.json` · `lib/icon-map.json` (meaning → the kit's real icon export
+names; what a spec must contain, since codegen imports it verbatim) ·
+`docs/uds-standards.md` · `docs/token-source.md` · `docs/component-notes.json`
 
 ---
 
@@ -333,8 +432,17 @@ shared by composer and validator so the two cannot disagree)
                              in the diff-manifest output
 2a. node scripts/embed-logo.mjs <sanctioned-url>  → lib/logo.json ← commit
                              (manual; must precede step 3)
+2b. node scripts/doctor.mjs                                        ← must pass
+                             Can this machine render the kit? If not,
+                             fix the environment or use the lite path.
+2c. node scripts/suggest-aliases.mjs --write → icons.mjs ALIASES,
+                             lib/icon-map.json                    ← commit
+                             Read its CHECK THESE list; the ties are
+                             semantic and only a human can settle them.
 3.  excalidraw-librarian   → uds.excalidrawlib, index.json,
                              CATALOG.md, measurements.json        ← merge
+                             CHECK: validate-lib clean WITHOUT
+                             --allow-derived; zero "derived" entries
 4.  guardrails-engineer    → lint rules + CI job                  ← merge
                              then enable "Pipelines must succeed"
 
@@ -343,6 +451,14 @@ per journey:
 6.  journey-designer       → validated scene + draft MR
 7.  journey-coder          → .tsx on the same branch
 ```
+
+**When the kit will not build**, step 3 becomes `excalidraw-librarian-lite`
+and everything after it still works: heights, colours and anatomy are exact,
+only content-sized widths are estimates. Provenance travels with the artifact
+— entries stamped `derived` make the composer stamp the scene `provisional`,
+`validate-scene` refuses it without `--allow-derived`, and `journey-coder`
+refuses it outright. Both librarians write the same filenames, so fixing the
+environment and re-running the real one upgrades every existing spec in place.
 
 Handoff between 5 and 6 is one line: *"Use the approved spec at
 `journeys/<name>/spec.json`."* Iterations overwrite the spec, so the final
@@ -353,8 +469,19 @@ designer reproduces exactly the previewed scene.
 
 ## 8. Open items
 
-- **Re-run 1 and 2** — the curator for `component-notes.json`, the extractor
-  for the recursive glob that brings DataTable/DatePicker back. Then 2a, 3.
+- **`Badge` `xs` and `sm` are junk measurements** — 4x4 and 8x8 anchors with
+  4px text, in a library that otherwise measured cleanly. `validate-lib.mjs`
+  now warns; the librarian needs to wait for layout (fonts ready, element
+  visible) before reading geometry. Check whether other components' small
+  sizes are affected before trusting any of them.
+- **The kit's icon import form is unverified** — `journey-coder` must
+  reproduce it, and a barrel import against a deep-import kit will not
+  resolve. One command settles it:
+  `grep -rhE "^import .*(icon|Icon)" src/components/ui/ | sort -u | head`
+- **Badge status colours are `*10` tints** and not distinguishable at 100%
+  zoom in a 20-row table. The library is faithful — the `cva` defines only
+  `bg-*` per variant, no per-variant text colour — so this is a finding for
+  the design-system owners, not a mockup bug. Icons are the mitigation.
 - **`--ubs-text-primary` unresolved** — referenced by `Button.tsx`
   `secondary`/`ghost`; check whether it exists as a Tailwind `@theme`
   mapping or is genuinely missing.
@@ -369,8 +496,12 @@ designer reproduces exactly the previewed scene.
   merged with zero manual fixes; revision rounds before approval; unmapped
   elements per codegen report.
 - **Composer layout is form-shaped** — vertical stacks, `Card` nesting,
-  `field` pairs, `row` groups. A dashboard grid will need it extended;
-  extend the composer rather than letting an agent hand-place elements.
+  `field` pairs, `row` groups, plus synthesized tables. A dashboard grid will
+  need it extended; extend the composer rather than letting an agent
+  hand-place elements.
+- **Steps 1 and 2 have been re-run** and the extractor output validated
+  clean; the real librarian has run. What has never run is anything after the
+  mockup.
 - Standards-doc corrections outstanding: `bronze80`/`bronze90`, button
   heights, the three `text-*` aliases.
 - Doc diff should **normalize token names** before comparing.
@@ -393,6 +524,15 @@ designer reproduces exactly the previewed scene.
 - **Silence is a failure.** Coverage gaps, skipped components, derived
   entries and missing notes all have to be declared. Almost every bug here
   was something disappearing quietly.
+- **Look at the picture.** Several bugs were invisible in the element list and
+  obvious in a render: a gear icon that read as noise at 16px, cell text
+  drawn over the next column, a badge that was a coloured hairline. Numbers
+  confirm what you already suspect; a render tells you what you did not.
+- **Reproduce the reported symptom in a fixture before fixing it.** Every
+  fix this session was preceded by building a library or spec that produced
+  the user's exact output. Twice that changed the diagnosis — the badge
+  hairline was a tie-break, not an anchor bug, and the alias failure was word
+  boundaries, not scoring weights.
 - **Correct the user's premise when it is wrong**, rather than answering the
   question as asked: `glab` vs push options, "translate 3 iterations" (no
   translation needed), the designer-vs-librarian re-run, `measurements.json`
