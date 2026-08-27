@@ -236,16 +236,26 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasC
   // fix: a spec cannot reach inside a glyph. A whole sketcher run was spent
   // proving that and then dropping the logo to get a passing compose.
   //
-  // An element inside a composite's glyph with no identity of its own IS that
-  // composite's anatomy, and this is the one place that knows the parent. So
-  // say so: stamp it with the parent and mark it a part. Codegen emits the
-  // parent and skips its parts, exactly as it already skips bound text whose
-  // container declares the component.
+  // Record WHAT IS KNOWN and nothing more: this shape came out of that glyph
+  // and the library never named it. Do not claim the parent renders it.
+  //
+  // The first attempt stamped {component: parent, part: true} and codegen
+  // skipped parts as anatomy. That destroyed a real component. The AppHeader
+  // glyph's Avatar is an unnamed circle with bound initials; before the stamp,
+  // codegen saw an unmapped ellipse next to the text "AS", recognised an
+  // avatar and emitted one. After it, the ellipse looked accounted-for AND the
+  // "AS" text's container suddenly declared a component, so the bound-text
+  // dedupe swallowed the initials as AppHeader's own label. Two rules fired,
+  // an entire component vanished from the code, and the mockup still drew it.
+  //
+  // customData.unnamed satisfies the validator's "must be mappable" rule
+  // without asserting an identity, and codegen is told to identify these from
+  // context or report them — never to skip them quietly.
   for (const el of out) {
     if (el.customData?.component) continue;
     if (el.type === "text" && el.containerId) continue; // described by its container
     if (!rootComponent) continue;
-    el.customData = { ...(el.customData ?? {}), component: rootComponent, part: true };
+    el.customData = { ...(el.customData ?? {}), unnamed: true, inGlyphOf: rootComponent };
     glyphParts.push(`${rootComponent}: ${el.type}`);
   }
 
@@ -964,9 +974,9 @@ if (missingCellComponents.length) {
 if (glyphParts.length) {
   const shown = [...new Set(glyphParts)];
   console.log(`  ${glyphParts.length} unstamped glyph shape(s) attributed to their parent: ${shown.join(", ")}`);
-  console.log("  HANDLED — nothing to do. They are marked part: true and codegen skips them.");
-  console.log("  Not a spec problem and not yours to fix; mention it once at handoff so the");
-  console.log("  librarian can stamp them properly, then carry on.");
+  console.log("  Marked unnamed: true — the scene validates and codegen must identify or");
+  console.log("  report each one, never skip it. Not a spec problem and not yours to fix;");
+  console.log("  mention it at handoff so the librarian can stamp them properly.");
 }
 if (overflowed.length) {
   console.log(`  children overflow a fixed-height component: ${[...new Set(overflowed)].join(", ")}`);

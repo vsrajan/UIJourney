@@ -44,20 +44,33 @@ referencing real `journeyStep` values.
 copy, titles, table content, headers and layout regions are components; an
 annotation inside a frame is a contract violation because codegen drops it.
 
-## `part: true`
+## `unnamed: true`
 
 A composite's glyph can carry shapes the library never gave an identity — the
 AppHeader kit ships an Avatar whose initials text is stamped and whose circle
 is not. Those would arrive unmapped, and "no customData at all" is an error no
 spec can fix, because a spec cannot reach inside a glyph.
 
-The composer stamps them with their parent and `part: true`. That is the truth
-about them: they are that composite's anatomy. Codegen emits the parent and
-skips its parts, the same way it skips bound text described by its container.
+The composer marks them `unnamed: true` with `inGlyphOf` naming the glyph they
+came from. That records exactly what is known — this shape came out of that
+composite, and the library never named it — and asserts nothing else.
 
-The composer reports each one. It is not a blocker, but it is worth passing to
-`excalidraw-librarian` — an Avatar whose circle is unstamped is a capture bug,
-and stamping it properly is better than having the composer infer it.
+An earlier version stamped them with the parent's component name and a
+`part: true` flag, on the theory that they were the parent's anatomy. That
+destroyed a real component. The AppHeader Avatar is an unnamed circle with
+bound initials; codegen used to see an unmapped ellipse beside the text "AS",
+recognise an avatar and emit one. Once the ellipse carried `component:
+"AppHeader"`, two rules fired at once — the part was skipped as anatomy, and
+the initials were deduped away as AppHeader's own label. The avatar vanished
+from the code while the mockup still drew it.
+
+The lesson is narrow and worth keeping: **the composer may record that the
+library said nothing; it may not decide what the silence meant.** Codegen
+identifies these from context or reports them as unmapped, never skips them.
+
+The validator warns on each one, and the warning stands until
+`excalidraw-librarian` stamps the shape properly. That is the real fix; this
+marker only stops the gap being silent.
 
 ## Fixing a failure
 

@@ -115,15 +115,28 @@ before quoting it.
    API per the manifest. A variant or prop not in the manifest is an ERROR:
    record it in the report, fall back to the component's default variant,
    and flag it in chat — never invent an API.
-3. Elements with `customData.annotation: true` are skipped. So are elements
-   with `customData.part: true` — those are a composite's own anatomy (an
-   Avatar's circle, a header's divider) that the library did not name, already
-   accounted for by the parent component you emit; they are not a second
-   component. Elements with no `customData` at all: attempt no guess; list
-   them in the report as unmapped. A bound text whose container already
-   declares a component is the SAME component instance — its text is the
-   label/content prop, never a second component (dedupe by `containerId`,
-   even if a legacy scene wrongly stamped `customData` on the text too).
+3. Elements with `customData.annotation: true` are skipped.
+
+   **`customData.unnamed: true` is the opposite of a skip.** It means the shape
+   came out of the glyph named in `inGlyphOf` and the library never gave it an
+   identity — the composer is telling you what it knows, not what to do. These
+   are usually real components: the AppHeader glyph carries an Avatar as an
+   unnamed circle with bound initials. Identify it from context — a circle with
+   two initials in it is an `Avatar`, a 2px line under a nav item is a
+   `Separator` — and emit the kit component. If you genuinely cannot tell,
+   **list it in the report as unmapped and say what it looked like**. Never
+   drop one silently; a shape the mockup draws and the code omits is exactly
+   the defect the developer will find in a browser instead of in the report.
+
+   Elements with no `customData` at all: attempt no guess; list them in the
+   report as unmapped.
+
+   A bound text whose container already declares a component is the SAME
+   component instance — its text is the label/content prop, never a second
+   component (dedupe by `containerId`, even if a legacy scene wrongly stamped
+   `customData` on the text too). **This dedupe does not apply when the
+   container is `unnamed`** — there the text is evidence of what the shape is,
+   not a label you have already emitted.
 4. Layout comes from the kit's spacing utilities (compact rhythm), inferred
    from the scene's relative positions — never absolute pixel positioning,
    never inline styles, never raw hex (the compliance lint enforces this;

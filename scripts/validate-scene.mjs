@@ -226,8 +226,15 @@ for (const el of els) {
   // was dropping frameId — which silently removes the label from its frame,
   // so it stops moving with the screen.
   const isBoundText = el.type === "text" && !!el.containerId;
-  if (el.frameId && !isBoundText && !cd.annotation && !cd.component && !cd.transition && el.type !== "frame") {
+  if (el.frameId && !isBoundText && !cd.annotation && !cd.component && !cd.transition && !cd.unnamed && el.type !== "frame") {
     errors.push(`${label} inside a frame has no customData at all — codegen cannot map it`);
+  }
+  // customData.unnamed is the composer saying "this came out of <glyph> and the
+  // library never named it". It is mappable — codegen identifies it from
+  // context or reports it — so it is not an error, but it IS a library defect
+  // and stays visible until the librarian stamps it.
+  if (cd.unnamed) {
+    warns.push(`${label} is an unnamed shape from the ${cd.inGlyphOf ?? "?"} glyph — the library did not name it; codegen must identify or report it. Ask excalidraw-librarian to stamp it`);
   }
   // Bound text belongs to the same frame as its container.
   if (isBoundText && byId[el.containerId]) {
