@@ -24,7 +24,7 @@
 //         |  { row: [node...] }
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { dirname, resolve, isAbsolute } from "node:path";
+import { dirname, resolve, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildIndex, lookupEntry, unmatchedAxes } from "./lib-index.mjs";
 import { isScaffoldText, PLACEHOLDER_HOSTS } from "./placeholder-text.mjs";
@@ -45,7 +45,7 @@ const flag = (n, d) => {
 const P = (p) => (isAbsolute(p) ? p : resolve(process.cwd(), p));
 
 if (!specPath) {
-  console.error("usage: node scripts/compose-scene.mjs <spec.json> [--lib p] [--typography p] [--tokens p] [--logo p] [--out p]");
+  console.error("usage: node scripts/compose-scene.mjs <spec.json> [--lib p] [--typography p] [--tokens p] [--logo p] [--out p] [--no-validate]");
   process.exit(2);
 }
 
@@ -934,4 +934,40 @@ if (placeholdersDropped.length) {
 if (derivedUsed.size) {
   console.log(`  PROVISIONAL: ${derivedUsed.size} component(s) came from derived library entries (${[...derivedUsed].sort().join(", ")}).`);
   console.log("  Widths are estimates. Fine for mockups; validate with --allow-derived, and journey-coder will refuse this scene.");
+}
+
+// ---------------------------------------------------------------- validate
+// The composer satisfies every rule validate-scene.mjs checks, so validation
+// is a regression check on this script rather than a gate on its caller. It
+// runs here so there is no second command for an agent to forget, and so a
+// clean compose is a clean scene by construction.
+//
+// --allow-derived is passed automatically when the library is derived: the
+// composer already knows, having just stamped the scene provisional, and
+// making an agent re-derive that only invites it to reach for the flag on
+// scenes that have not earned it.
+if (!argv.includes("--no-validate")) {
+  const { spawnSync } = await import("node:child_process");
+  const validator = join(REPO, "scripts", "validate-scene.mjs");
+  if (existsSync(validator)) {
+    const args = [
+      validator,
+      outPath,
+      flag("lib", "lib/uds.excalidrawlib"),
+      "--typography", flag("typography", "lib/typography.json"),
+    ];
+    if (existsSync(flag("tokens", "data/tokens.json"))) {
+      args.push("--tokens", flag("tokens", "data/tokens.json"));
+    }
+    if (derivedUsed.size) args.push("--allow-derived");
+    console.log("");
+    const r = spawnSync(process.execPath, args, { stdio: "inherit" });
+    if (r.status !== 0) {
+      console.log(
+        "\nThe scene did not validate. Fix it in the SPEC, never by editing the\n" +
+          ".excalidraw — see docs/scene-rules.md for what each rule means."
+      );
+      process.exit(r.status ?? 1);
+    }
+  }
 }

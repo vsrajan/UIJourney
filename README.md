@@ -77,17 +77,13 @@ cannot read a story by its number, cannot read MR comments, cannot see
 labels. Anything living in GitLab that the agent needs must be pasted into
 chat by you. You are the bridge in both directions.
 
-**Kind C — The `journey-approved` label on a merge request.**
-On GitLab this label is a **team convention for humans, not a machine
-gate**: agents can't check it. It records, for teammates and auditors, that
-the mockup was reviewed. The actual approval mechanism is simpler — *you
-launching the `journey-coder` agent is the approval.* Apply the label when
-you approve (create it once under the GitLab project's **Manage → Labels**
-if it doesn't exist), then launch the coder.
+That's the whole input model: **files at paths and chat text.** Each agent
+section below tags its inputs `[A]` or `[B]`.
 
-That's the whole input model: **files at paths, chat text, one
-human-convention label.** Each agent section below tags its inputs `[A]`,
-`[B]`, or `[C]`.
+**Approval is not a file or a label.** *Launching the `journey-coder` agent
+is the approval* — the agent states that assumption once before starting, and
+looks for no other signal. If your team wants a written record that a mockup
+was reviewed, that is a human convention to run alongside; no agent reads it.
 
 ### How the MR appears (git push options — no extra tools)
 
@@ -193,8 +189,7 @@ runs there.
    GitLab — that's where the VS Code Copilot extension looks for its
    instruction files; it's unrelated to hosting.
 2. Merge that via a normal MR to the default branch.
-3. Create the `journey-approved` label (**Manage → Labels → New label**).
-4. Have the raw UDS standards markdown at hand for the first agent —
+3. Have the raw UDS standards markdown at hand for the first agent —
    preferably commit it as `docs/raw/uds-standards-raw.md` first (large
    documents survive better as committed files than as pasted chat text).
 
@@ -211,16 +206,16 @@ SETUP (once, strictly in this order, merge each MR before the next):
 
 JOURNEY LOOP (repeat per user journey):
 
-  copy GitLab story text ──▶ journey-designer ──▶ draft MR with the mockup
-       ▲                                              │
-       │        you open the .excalidraw file,        │
+  copy GitLab story text ──▶ journey-sketcher ──▶ spec + validated scene
+       ▲                                              │  + PNG preview
+       │        you look at the PNG,                  │  (committed locally)
        └── revisions via chat ◀── review, nudge  ◀────┘
                                       │
-              you add `journey-approved` label, and launch:
+                  happy with it? launching the coder IS the approval:
                                       │
-                    journey-coder ──▶ code on the same MR branch
-                                      │
-                    `uijourney-compliance` CI job passes → review → merge
+                    journey-coder ──▶ screens + browser preview page
+                                      │  (committed locally)
+                    you branch, review and merge by hand
 ```
 
 Agents can't call each other; each one's committed outputs are the next
@@ -359,23 +354,25 @@ must succeed"** so the compliance job actually blocks merging.
 
 ---
 
-## Journey agent 5: `journey-designer` — run for every new journey
+## Journey agent 5: `journey-sketcher` — run for every new journey
 
 **What it does:** turns a plain-English journey description into
-`journeys/<name>/journey.excalidraw` — one Excalidraw frame per screen,
-composed only from library shapes, with arrows describing the transitions —
-and raises it as a draft MR.
+`journeys/<name>/spec.json`, composes it into
+`journeys/<name>/journey.excalidraw` — one frame per screen, built only from
+library shapes, with arrows for the transitions — validates it, and renders a
+PNG preview. Seconds per iteration. It commits to the branch you are already
+on and does nothing else: no branch, no push, no merge request.
 
 **Inputs and how to provide each one:**
 
 | Input | Kind | How to provide it — exactly |
 |---|---|---|
-| The journey description | **[B]** | Open the GitLab story, copy its description text, and paste it into the chat prompt. The agent cannot look a story up by number — the pasted text is the input. Be concrete about: the screens you expect, what the user does on each, and what moves them to the next screen. Plain language is exactly right; no design vocabulary needed. The agent will ask its clarifying questions in chat before building. |
-| `lib/uds.excalidrawlib`, `data/component-manifest.json` | **[A]** | From the merged setup MRs; pull latest. Nothing to paste. |
+| The journey description | **[B]** | Open the GitLab story, copy its description text, and paste it into the chat prompt. The agent cannot look a story up by number — the pasted text is the input. Be concrete about: the screens you expect, what the user does on each, and what moves them to the next screen. Plain language is exactly right; no design vocabulary needed. |
+| `lib/uds.excalidrawlib`, `lib/icon-map.json`, `data/component-manifest.json` | **[A]** | From setup; pull latest. Nothing to paste. The agent never opens the library itself — `node scripts/lib-index.mjs --brief` gives it the catalogue in one line per component. |
 
 **Example chat prompt:**
 
-> Run as the journey-designer agent. Journey below (from story JIRA-1234 /
+> Run as the journey-sketcher agent. Journey below (from story JIRA-1234 /
 > gitlab#87):
 >
 > An employee submits an expense claim.
@@ -389,55 +386,53 @@ and raises it as a draft MR.
 > Transitions: Submit claim → Review; Confirm → Confirmation;
 > Back to edit → Claim entry.
 
-**What you get back:** a draft MR with the `.excalidraw` file. Review it by
-opening the file (it's in your working tree already) in the VS Code
-Excalidraw extension or the firm's Excalidraw. Move things, edit labels,
-delete elements — hand edits are expected and survive into the code step;
-commit and push them to the same branch. For bigger changes, ask in the
-same chat session ("split screen 1 into two steps") and the agent revises.
-Note that comments made on the MR in GitLab never reach the agent — relay
-them in chat yourself.
+**What you get back:** a PNG to look at, and the spec and scene in your
+working tree. Revise by talking to it — "make the table wider", "drop the
+notes field" — and it edits the spec and recomposes. **Do not edit the
+`.excalidraw` by hand**: the scene is regenerated from the spec on every
+compose, so your change is discarded and reappears. If something cannot be
+said in the spec, the agent will tell you what would have to change.
 
-**When satisfied:** add the **`journey-approved`** label to the MR (**[C]**,
-team convention), and move to the next agent — launching it is the real
-approval.
+**When satisfied:** the agent commits, and launching the coder is the
+approval. Branch, review and merge by hand if and when you want them.
 
 ---
 
 ## Journey agent 6: `journey-coder` — run after you approve
 
 **What it does:** reads the approved `.excalidraw` file's embedded metadata
-(including your hand edits) and generates the React screens under
-`src/screens/<journey-name>/`, using only kit components, plus a
-`codegen-report.md` accounting for every element mapped or skipped. It
-commits to the **same branch** as the mockup MR so diagram and code merge
-together, and iterates until lint and typecheck pass.
+and generates the React screens under `src/screens/<journey-name>/`, using
+only kit components — plus a browser-viewable preview page so you can see the
+real thing running, and a `codegen-report.md` accounting for every element
+mapped or skipped. It iterates until lint and typecheck pass, then commits to
+the branch you are already on.
 
 **Inputs and how to provide each one:**
 
 | Input | Kind | How to provide it — exactly |
 |---|---|---|
-| Which journey/branch | **[B]** | Name it in the chat prompt: "the expense-claim journey on branch `uijourney/journey-expense-claim`". The agent checks that branch out and pulls latest, picking up any hand edits you pushed. |
+| Which journey | **[B]** | Name it in the chat prompt: "the expense-claim journey". It reads the scene where it sits; it does not check anything out. |
 | Your approval | — | Launching this agent IS the approval; there is no separate gate. The agent states this assumption once before starting — object if it's wrong. |
 | `data/*.json`, the compliance lint | **[A]** | From setup; pull latest. Nothing to paste. |
 
 **Example chat prompt:**
 
 > Run as the journey-coder agent. Generate code for the expense-claim
-> journey on branch `uijourney/journey-expense-claim`. The mockup is
-> approved.
+> journey. The mockup is approved.
 
-**What you get back:** commits on the mockup branch adding the screens and
-the codegen report, pushed to the existing MR, plus a summary in chat
-(paste it as an MR comment for the record): what was generated, anything
-unmapped, and confirmation lint + typecheck pass. The
-`uijourney-compliance` pipeline job must be green before merge — if it
-fails on the MR, relay the failure into chat and the agent fixes it; don't
-hand-patch or disable rules.
+**What you get back:** a commit on your current branch adding the screens,
+the preview page and the report, plus a chat summary: what was generated, the
+command to open the preview in a browser, anything unmapped, and whether lint
+and typecheck actually ran and passed.
 
-If you edit the mockup again while the MR is open, tell the coder in chat
-("scene updated, please regenerate") — the diagram is the source of truth
-until merge.
+Open the preview next to the mockup PNG — that comparison is what tells you
+whether codegen landed. If the page renders unstyled, the usual causes are a
+missing global-stylesheet import or Tailwind `content` globs that do not cover
+`src/screens/**`; the agent is told to check both and to ask before editing
+your build config.
+
+If you edit the mockup again, tell the coder in chat ("scene updated, please
+regenerate") — the scene is the source of truth.
 
 ---
 

@@ -374,9 +374,9 @@ and the gap gets fixed.*
 | `excalidraw-librarian` | Measures variants, builds `uds.excalidrawlib` + `index.json` + `CATALOG.md`; anatomy contract; force-open overlays; runs `doctor.mjs` first and refuses to start if it fails |
 | `excalidraw-librarian-lite` | Same library with geometry **derived** from Tailwind classes, for when the kit will not build. Refuses to run if `doctor.mjs` passes |
 | `guardrails-engineer` | UDS lint rules + `uijourney-compliance` GitLab CI job |
-| `journey-sketcher` | **Lite:** story → `spec.json` → compose → PNG preview. Seconds per iteration, no MR |
-| `journey-designer` | Spec → validated scene → draft MR. Rules stated verbatim so it never reads validator source |
-| `journey-coder` | Approved scene → `.tsx` screens + codegen report, on the same MR branch |
+| `journey-sketcher` | Story → `spec.json` → compose (which validates) → PNG preview. Seconds per iteration; commits locally, never branches or pushes |
+| `journey-coder` | Approved scene → `.tsx` screens + browser preview page + codegen report; commits locally |
+| ~~`journey-designer`~~ | **Deleted.** Validation moved into the composer, MR delivery became manual, and the provisional interlock always lived in `journey-coder` |
 
 ### Scripts (`scripts/`) — plain Node, no deps except Playwright for PNG
 
@@ -405,7 +405,8 @@ Chromium binary — and prints the exact `chromium.launch()` call to use) ·
 `typography.json` (UDS type scale, prose-sourced, **verify by hand**) ·
 `skips.json` (declared coverage gaps; `$`-prefixed keys are comments) ·
 `docs/spec-cheatsheet.md` (the spec language on one page — the sketcher's whole
-format reference) · `docs/spec-schema.md` (the full version: nodes, variant
+format reference) · `docs/scene-rules.md` (what validate-scene checks and why,
+read only when it fails) · `docs/spec-schema.md` (the full version: nodes, variant
 axes, icons, tables, underlines, and the rule that nothing outside the spec
 survives a compose) · `docs/icon-checker.md` (finding the kit's icon names and
 mapping them) · `docs/lint-checker.md` (whether the repo can run lint and
@@ -453,10 +454,16 @@ names; what a spec must contain, since codegen imports it verbatim) ·
                              then enable "Pipelines must succeed"
 
 per journey:
-5.  journey-sketcher       → spec.json + preview (iterate here)
-6.  journey-designer       → validated scene + draft MR
-7.  journey-coder          → .tsx on the same branch
+5.  journey-sketcher       → spec.json, composed AND validated scene,
+                             PNG preview; commits locally (iterate here)
+6.  journey-coder          → .tsx + browser preview page; commits locally
 ```
+
+Neither journey agent branches, pushes or opens an MR — the developer does
+that by hand. `journey-designer` used to sit between them; it ran the
+validator (now inside `compose-scene.mjs`), opened the MR (now manual) and
+labelled provisional scenes (the interlock always lived in `journey-coder`'s
+own refusal check), so it had nothing left of its own to do.
 
 **When the kit will not build**, step 3 becomes `excalidraw-librarian-lite`
 and everything after it still works: heights, colours and anatomy are exact,
@@ -466,10 +473,10 @@ only content-sized widths are estimates. Provenance travels with the artifact
 refuses it outright. Both librarians write the same filenames, so fixing the
 environment and re-running the real one upgrades every existing spec in place.
 
-Handoff between 5 and 6 is one line: *"Use the approved spec at
-`journeys/<name>/spec.json`."* Iterations overwrite the spec, so the final
-file is the accumulated result; composition is deterministic, so the
-designer reproduces exactly the previewed scene.
+Handoff between 5 and 6 is one line: *"Generate code for `<journey>`."*
+Iterations overwrite the spec, so the final file is the accumulated result;
+composition is deterministic, so the scene the coder reads is exactly the one
+the developer previewed.
 
 ---
 

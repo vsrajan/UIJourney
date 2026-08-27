@@ -74,23 +74,25 @@ changes.
 developer copies the GitLab story text
         │  VS Code chat → agent: journey-sketcher → paste story
         ▼
-spec.json + PNG preview in seconds  ──▶ iterate on the spec, not the scene
-        │  when the shape is right:
-        │  VS Code chat → agent: journey-designer → "use the approved spec"
+spec.json → composed AND validated scene → PNG preview, in seconds
+        │                                          ▲
+        │  iterate on the SPEC, never the scene ───┘  revisions in chat
+        │  when the shape is right, the sketcher commits locally
         ▼
-draft MR with journeys/<name>/journey.excalidraw    ←──┐
-        │                                              │ revision requests in
-        ▼                                              │ chat: designer updates
-developer opens the file in Excalidraw, nudges,  ──────┘ the same branch
-adds the `journey-approved` label to the MR (team
-convention), and — this IS the approval —
-        │  VS Code chat → agent: journey-coder → names the journey/branch
+developer looks at the PNG. Launching the coder IS the approval —
+there is no label and no gate.
+        │  VS Code chat → agent: journey-coder → names the journey
         ▼
-same MR branch gains src/screens/<name>/*.tsx + codegen-report.md
-        │  `uijourney-compliance` job must pass on the MR pipeline
+src/screens/<name>/*.tsx + preview.html + codegen-report.md,
+lint and typecheck green, committed on the same local branch
         ▼
-normal MR review → merge
+developer branches, reviews and merges BY HAND
 ```
+
+Neither journey agent branches, pushes, or opens a merge request. That is
+deliberate: a mockup iteration is a conversation, not a change request, and
+the delivery ceremony cost more than the review was worth. The setup agents
+still deliver by MR — they change shared artifacts and do need review.
 
 ### The provisional track
 
@@ -114,19 +116,17 @@ library rather than waiting.
 Three rules keep the loop honest:
 
 - **The scene is the spec.** `journey-coder` reads only the file's
-  `customData` — including any hand-edits the developer made after the
-  designer last wrote it. If the developer changes the scene while the MR
-  is open, they ask the coder to regenerate; the diagram and code merge
-  together, in one MR, always consistent.
-- **Approval is the developer's launch decision.** There is no machine gate
-  between designer and coder: the developer launching `journey-coder` is
-  trusted to have reviewed the mockup. The `journey-approved` label on the
-  MR records that decision for teammates and auditors; agents neither set
-  nor check it.
-- **MR comments don't reach agents.** Review feedback on the MR must be
-  relayed by the developer into the VS Code chat session — agents cannot
-  read GitLab. Budget for this: the developer is the bridge in every
-  revision round.
+  `customData`. But the scene is regenerated from `spec.json` on every
+  compose, so a hand-edit to the `.excalidraw` is discarded the next time
+  anyone runs the sketcher — revisions belong in the spec. If the scene does
+  change, ask the coder to regenerate.
+- **Approval is the developer's launch decision.** There is no machine gate:
+  the developer launching `journey-coder` is trusted to have reviewed the
+  mockup, and no agent looks for any other signal. A written record of review
+  is a human convention to run alongside if the team wants one.
+- **Nothing in GitLab reaches an agent.** Story text, review comments, labels
+  — all of it must be pasted into the VS Code chat by the developer. Budget
+  for this: the developer is the bridge in every revision round.
 
 ## Pilot (Phase 5)
 

@@ -20,7 +20,17 @@ in a web UI. Consequences that apply to every agent and every task:
 - Continuous integration is **GitLab CI** (`.gitlab-ci.yml`), not GitHub
   Actions. Any CI job you create or extend goes there.
 
-## Delivery procedure — every agent follows this
+## Delivery — two procedures, by agent
+
+**The journey agents — `journey-sketcher` and `journey-coder` — do not
+deliver.** They commit to whatever branch the developer is already on, and
+stop. No branch, no push, no merge request, no CI. Branching, review and
+merging are done by hand, deliberately: a mockup iteration is a conversation,
+not a change request, and the ceremony cost more than the review was worth.
+
+Everything below applies to the **setup agents only** — `standards-curator`,
+`design-data-extractor`, `excalidraw-librarian`, `guardrails-engineer` — which
+run once, change shared artifacts, and do need review.
 
 1. **Preflight, before changing anything:** run `git status`. If the
    working tree is not clean, stop and ask the developer to commit or
@@ -29,8 +39,6 @@ in a web UI. Consequences that apply to every agent and every task:
    `git fetch origin` and `git checkout -b uijourney/<task-slug>
    origin/<default-branch>` (ask the developer for the default branch name
    if it is not obvious from `git remote show origin`).
-   Exception: `journey-coder` continues on the existing mockup MR branch
-   instead of creating a new one.
 2. Do the work. Commit with clear, descriptive messages.
 3. Prepare the full MR description (each agent's file says what it must
    contain) and print it in chat for the developer.
@@ -108,13 +116,18 @@ Setup (run once, re-run when the kit or standards change):
 `standards-curator` → `design-data-extractor` → `excalidraw-librarian` →
 `guardrails-engineer`.
 
-Recurring, per user journey:
-`journey-sketcher` (story → spec + preview, seconds per iteration) →
-`journey-designer` (spec → validated mockup MR) → developer reviews and,
-when satisfied, launches `journey-coder` on the same branch (launching the
-coder IS the approval — the developer is trusted; the `journey-approved`
-GitLab label on the MR is a process convention for humans, not a gate the
-agent can verify).
+Recurring, per user journey — two agents, both committing locally:
+`journey-sketcher` (story → spec → composed and validated scene → PNG
+preview, seconds per iteration) → developer reviews the preview and, when
+satisfied, launches `journey-coder` (launching the coder IS the approval —
+the developer is trusted, and no other signal is looked for) → React screens
+plus a browser-viewable preview page.
+
+There was once a `journey-designer` between them. It did three things:
+ran the validator, opened an MR, and labelled provisional scenes. The
+composer now validates its own output, the MR is done by hand, and the
+provisional interlock always lived in `journey-coder`'s own refusal check —
+so the agent had nothing left of its own to do.
 
 Each agent's outputs are committed files; the next agent must verify its
 declared inputs exist and are current before doing anything else. See
