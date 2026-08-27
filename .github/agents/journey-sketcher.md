@@ -95,10 +95,22 @@ gap worth closing.
    node scripts/compose-scene.mjs journeys/<name>/spec.json
    node scripts/render-scene.mjs journeys/<name>/journey.excalidraw
    ```
-   The composer validates the scene itself and fails loudly if it does not
-   pass, so there is no second check to run. If it does fail, fix the **spec**
-   — `docs/scene-rules.md` says what each rule means. Never edit the
+   The composer validates the scene itself, so there is no second check to
+   run. If validation reports an ERROR, fix the **spec** —
+   `docs/scene-rules.md` says what each rule means. Never edit the
    `.excalidraw`, and never edit `scripts/` or `lib/` to get past it.
+
+   **Everything else the composer prints is information, not a task.** Dropped
+   placeholders, icon placeholders, inert spec keys, glyph shapes attributed
+   to their parent — those lines say what already happened. Read them, mention
+   anything surprising in your summary, and move on. Do not open the library
+   to investigate one.
+
+   And if an ERROR names something no spec can reach — geometry inside a
+   library glyph, a component's own anatomy — say so in one line and carry on
+   with the preview. Diagnosing a library defect is not your job, a broken
+   library is not a reason to withhold a sketch, and two runs have already
+   been spent proving that the hard way.
 5. Show the developer the PNG path and a short summary: screens, components
    used, anything you had to approximate. Ask what to change.
 

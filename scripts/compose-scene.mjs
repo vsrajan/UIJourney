@@ -263,6 +263,7 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasC
 
 const placeholdersDropped = [];
 const glyphParts = [];
+const overflowed = [];
 const iconPlaceholders = [];
 const ignoredKeys = [];
 const missingCellComponents = [];
@@ -794,16 +795,40 @@ for (const [i, screen] of (spec.screens ?? []).entries()) {
       }
 
       if (node.children?.length) {
-        // Card-like container: stack children inside with padding, then grow
-        // the surface to fit them.
+        // Stack children inside with padding. Whether the surface then GROWS
+        // to fit them is not a free choice: the library says which components
+        // may change height, and the validator enforces it.
+        //
+        // This used to grow every container unconditionally — Card behaviour
+        // applied to everything. An AppHeader is resize: "horizontal", so
+        // giving it children silently pushed 56px to 68px and produced a
+        // height-mismatch ERROR on every single compose. Two sketcher runs
+        // were spent diagnosing that as a librarian capture defect. It was
+        // this line.
         const innerX = (anchorClone?.x ?? x) + CARD_PAD;
         const innerW = (anchorClone?.width ?? width) - 2 * CARD_PAD;
         const top = (anchorClone?.y ?? y) + CARD_PAD;
         const savedY = y;
         y = top;
+        const before = elements.length;
         place(node.children, innerX, innerW, indent + 1);
-        const contentBottom = y;
-        if (anchorClone) anchorClone.height = Math.max(h, contentBottom - anchorClone.y + CARD_PAD - GAP);
+        const kids = elements.slice(before);
+        const contentBottom = y - (node.gap ?? GAP);
+        const resize = entry?.anchor?.customData?.resize ?? "none";
+
+        if (anchorClone && resize === "both") {
+          anchorClone.height = Math.max(h, contentBottom - anchorClone.y + CARD_PAD);
+        } else if (anchorClone) {
+          // Fixed height. Centre the children in the band rather than letting
+          // them hang from the top, which is what a real header does — and
+          // report an overflow instead of quietly resizing past the contract.
+          const contentH = contentBottom - top;
+          const shift = Math.round((anchorClone.height - contentH) / 2 - CARD_PAD);
+          if (shift) for (const k of kids) k.y += shift;
+          if (contentH > anchorClone.height - 2) {
+            overflowed.push(`${comp} (${Math.round(contentH)}px of children in a ${Math.round(anchorClone.height)}px band)`);
+          }
+        }
         y = savedY + (anchorClone?.height ?? h) + (node.gap ?? GAP);
         continue;
       }
@@ -939,9 +964,14 @@ if (missingCellComponents.length) {
 if (glyphParts.length) {
   const shown = [...new Set(glyphParts)];
   console.log(`  ${glyphParts.length} unstamped glyph shape(s) attributed to their parent: ${shown.join(", ")}`);
-  console.log("  The library did not give these an identity of their own, so they are marked");
-  console.log("  part: true and codegen skips them. Worth telling excalidraw-librarian —");
-  console.log("  an Avatar whose circle is unstamped is a capture the librarian should fix.");
+  console.log("  HANDLED — nothing to do. They are marked part: true and codegen skips them.");
+  console.log("  Not a spec problem and not yours to fix; mention it once at handoff so the");
+  console.log("  librarian can stamp them properly, then carry on.");
+}
+if (overflowed.length) {
+  console.log(`  children overflow a fixed-height component: ${[...new Set(overflowed)].join(", ")}`);
+  console.log("  The library says this component cannot change height, so it was NOT resized.");
+  console.log("  Give it fewer or shorter children, or use a component that resizes.");
 }
 if (ignoredKeys.length) {
   const shown = [...new Set(ignoredKeys)];
