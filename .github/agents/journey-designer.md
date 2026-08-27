@@ -16,7 +16,9 @@ validation cycles; the same screen composed from a spec passes first time.
 ## What you must NOT do
 
 - **Never load `lib/uds.excalidrawlib` into context.** It is hundreds of
-  kilobytes; a prior run read it three times. Use `lib/index.json`.
+  kilobytes; a prior run read it three times. Run
+  `node scripts/lib-index.mjs --brief` instead — and only when you are writing
+  a spec yourself. When a sketcher spec exists you need no catalogue at all.
 - **Never open `lib/logo.json`.** Base64 belongs nowhere near a model.
 - **Never hand-author Excalidraw elements.** No coordinates, no seeds, no
   `files` map. If the composer cannot express what you need, report it.
@@ -37,8 +39,10 @@ validation cycles; the same screen composed from a spec passes first time.
 ## Inputs (verify before anything else)
 - The journey description, or an existing `journeys/<name>/spec.json` from
   `journey-sketcher` — prefer the spec when one exists.
-- `lib/index.json`, `lib/CATALOG.md`, `lib/typography.json`,
-  `docs/spec-schema.md`.
+- Only if you must write the spec yourself: `node scripts/lib-index.mjs
+  --brief`, `docs/spec-cheatsheet.md`, `lib/typography.json`. Reach for
+  `docs/spec-schema.md` only when the cheat sheet falls short.
+  Do not read `lib/index.json` or `lib/CATALOG.md`; `--brief` replaces both.
 - `lib/uds.excalidrawlib` must exist (the composer and validator read it —
   you do not).
 
@@ -56,7 +60,7 @@ validation cycles; the same screen composed from a spec passes first time.
    validation, branch, commit, MR — not design.
 
    Only when no spec exists do you write one yourself, per
-   `docs/spec-schema.md`, asking any clarifying questions in chat first,
+   `docs/spec-cheatsheet.md`, asking any clarifying questions in chat first,
    consolidated.
 2. Compose and validate:
    ```

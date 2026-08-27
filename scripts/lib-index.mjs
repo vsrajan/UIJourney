@@ -146,9 +146,12 @@ export function unmatchedAxes(entry, wanted = {}) {
 // ------------------------------------------------------------------ CLI
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { readFileSync, existsSync } = await import("node:fs");
+  const { join, resolve, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
   const argv = process.argv.slice(2);
   const libPath = argv.find((a) => a.endsWith(".excalidrawlib")) ?? "lib/uds.excalidrawlib";
-  const which = argv.find((a) => !a.endsWith(".excalidrawlib"));
+  const which = argv.find((a) => !a.endsWith(".excalidrawlib") && !a.startsWith("--"));
 
   if (!existsSync(libPath)) {
     console.error(`ERROR: ${libPath} not found — run this from the repo root, or pass the path`);
@@ -156,6 +159,78 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const lib = JSON.parse(readFileSync(libPath, "utf8"));
   const index = buildIndex(lib);
+
+  // --brief: everything a spec author needs, on one line per component.
+  //
+  // Replaces reading lib/index.json AND lib/CATALOG.md — two projections of
+  // the same 156 components, ~6k tokens between them, to use about ten. This
+  // prints the axis values verbatim (they are what a spec must contain), the
+  // default anchor size, the resize hint and the "use when" note, and nothing
+  // else. The script reads the library; the model reads this.
+  if (argv.includes("--brief")) {
+    const notes = (() => {
+      const p = join(REPO, "docs", "component-notes.json");
+      if (!existsSync(p)) return {};
+      try { return JSON.parse(readFileSync(p, "utf8")); } catch { return {}; }
+    })();
+    const skips = (() => {
+      const p = join(REPO, "lib", "skips.json");
+      if (!existsSync(p)) return {};
+      try { return JSON.parse(readFileSync(p, "utf8")); } catch { return {}; }
+    })();
+    const noteFor = (c) => {
+      const n = notes[c];
+      if (!n) return "";
+      const s = typeof n === "string" ? n : n.useWhen ?? n.description ?? "";
+      return String(s).replace(/\s+/g, " ").trim();
+    };
+
+    const rows = [];
+    for (const [component, cands] of index.byComponent) {
+      // First-seen order, not alphabetical: the library follows the kit's cva
+      // declaration, which puts the default first and reads as the kit intends.
+      const values = new Map();
+      for (const c of cands) {
+        for (const [k, v] of Object.entries(c.axes)) {
+          if (!values.has(k)) values.set(k, []);
+          if (!values.get(k).includes(v)) values.get(k).push(v);
+        }
+      }
+      const axes = [...values.entries()].map(([k, vs]) => `${k}=${vs.join("|")}`).join(" ") || "-";
+      const def = lookupEntry(index, component, {});
+      const size = def?.anchor ? `${Math.round(def.anchor.width ?? 0)}x${Math.round(def.anchor.height ?? 0)}` : "?";
+      const resize = def?.anchor?.customData?.resize ?? "none";
+      rows.push({ component, axes, size, resize, use: noteFor(component) });
+    }
+    rows.sort((a, b) => a.component.localeCompare(b.component));
+
+    const w = Math.max(9, ...rows.map((r) => r.component.length));
+    const sw = Math.max(7, ...rows.map((r) => r.size.length));
+    const rw = Math.max(6, ...rows.map((r) => r.resize.length));
+    console.log(`${"COMPONENT".padEnd(w)}  ${"DEFAULT".padEnd(sw)}  ${"RESIZE".padEnd(rw)}  AXES / USE WHEN`);
+    for (const r of rows) {
+      console.log(`${r.component.padEnd(w)}  ${r.size.padEnd(sw)}  ${r.resize.padEnd(rw)}  ${r.axes}`);
+      if (r.use) console.log(`${" ".repeat(w + sw + rw + 6)}${r.use}`);
+    }
+
+    // Deferred components are listed on purpose: silence reads as an
+    // oversight and invites a hand-rolled substitute.
+    // skips.json buckets by kind (components / combinations / typography);
+    // only the component bucket answers "can I put this on a screen".
+    const deferred = Object.entries(skips.components ?? {}).filter(([k]) => !k.startsWith("$"));
+    if (deferred.length) {
+      console.log("\nDeferred — not in the library, do not substitute by hand:");
+      for (const [k, v] of deferred) {
+        const why = typeof v === "string" ? v : v?.reason ?? v?.why ?? "";
+        console.log(`  ${k}${why ? ` — ${String(why).replace(/\s+/g, " ").trim()}` : ""}`);
+      }
+    }
+    console.log(
+      `\n${rows.length} component(s). Axis values are verbatim — write them as-is in a spec.\n` +
+        "Need one component's fills and borders? node scripts/lib-index.mjs <Component>"
+    );
+    process.exit(0);
+  }
 
   if (!which) {
     const rows = [...index.byComponent.entries()]

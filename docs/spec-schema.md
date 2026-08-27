@@ -3,6 +3,11 @@
 A journey spec is the compact, semantic description of a set of screens.
 `scripts/compose-scene.mjs` expands it into a conforming `.excalidraw` file.
 
+> **Writing a spec? Start with `docs/spec-cheatsheet.md`** — one page, and it
+> covers a normal screen. This is the full reference: read it when the cheat
+> sheet does not cover what you are trying to say, and say so, because that
+> means the cheat sheet has a gap.
+
 The split is deliberate: **the spec carries meaning, the composer carries
 geometry.** Agents write specs; nothing writes Excalidraw JSON by hand. Every
 scene defect this pipeline has hit — bound labels at 0,0, missing

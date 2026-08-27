@@ -404,9 +404,12 @@ Chromium binary — and prints the exact `chromium.launch()` call to use) ·
 
 `typography.json` (UDS type scale, prose-sourced, **verify by hand**) ·
 `skips.json` (declared coverage gaps; `$`-prefixed keys are comments) ·
-`docs/spec-schema.md` (the spec language: nodes, variant axes, icons, tables,
-underlines, and the rule that nothing outside the spec survives a compose) ·
-`docs/icon-checker.md` (finding the kit's icon names and mapping them)
+`docs/spec-cheatsheet.md` (the spec language on one page — the sketcher's whole
+format reference) · `docs/spec-schema.md` (the full version: nodes, variant
+axes, icons, tables, underlines, and the rule that nothing outside the spec
+survives a compose) · `docs/icon-checker.md` (finding the kit's icon names and
+mapping them) · `docs/lint-checker.md` (whether the repo can run lint and
+typecheck at all, and the guardrails gaps a bare repo exposes)
 
 ### Generated into the firm repo, not copied from the template
 

@@ -13,10 +13,11 @@ without the ceremony, so the developer can iterate on layout and copy first.
 
 ## What you must NOT do
 
-- **Never load `lib/uds.excalidrawlib`.** It is hundreds of kilobytes and
-  reading it is the single largest cost in this pipeline. Use
-  `lib/index.json`, the compact catalogue of component/variant → size and
-  resize hint.
+- **Never load `lib/uds.excalidrawlib`, `lib/index.json` or
+  `lib/CATALOG.md`.** The library is hundreds of kilobytes; the other two are
+  156 components each, two projections of the same thing, to use about ten.
+  Run `node scripts/lib-index.mjs --brief` instead — one line per component
+  with its axis values, default size, resize hint and "use when".
 - **Never open `lib/logo.json`.** It holds a base64 blob. The composer
   splices it; a model transcribing base64 will eventually corrupt it
   silently.
@@ -30,23 +31,32 @@ without the ceremony, so the developer can iterate on layout and copy first.
 - Do not create branches, commits, or merge requests.
 
 ## Inputs
+
+This list is exhaustive. It is also step 1 — read these four things, write the
+spec, and open nothing else.
+
 - The journey description, pasted into chat by the developer.
-- `lib/index.json` — available components, their variants and sizes.
-- `lib/CATALOG.md` — the same components with a one-line "use when" from the
-  firm's standard. Read it: it is what tells you to reach for `DataTable`
-  rather than `Table` for an actionable list, and it is small.
+- `node scripts/lib-index.mjs --brief` — every component with its axis values
+  (verbatim, as a spec must contain them), default size, resize hint, "use
+  when", and the deferred list. This is what tells you to reach for
+  `DataTable` rather than `Table` for an actionable list.
+- `docs/spec-cheatsheet.md` — the spec format, one page.
 - `lib/typography.json` — the type scale tokens you may name.
-- `lib/icon-map.json` — the kit's icon export names, by meaning. Write one of
-  those names verbatim; it is what codegen imports. If the file is absent the
-  kit has not been mapped, so ask the developer for the icon's real name
-  rather than inventing one.
-- `docs/spec-schema.md` — the spec format.
+- `lib/icon-map.json` — the kit's icon export names, by meaning. Write one
+  verbatim; it is what codegen imports. If the file is absent the kit has not
+  been mapped, so ask the developer for the icon's real name rather than
+  inventing one.
+
+`docs/spec-schema.md` is the full reference and is **not** part of this read
+set. Open it only when the cheat sheet does not cover what you are trying to
+say, and say in your summary that you did — it means the cheat sheet has a
+gap worth closing.
 
 ## Steps
-1. Read `lib/index.json`, `lib/CATALOG.md` and `lib/typography.json`.
-   Nothing else.
+1. Read the four inputs above. Nothing else — not the library, not
+   `index.json`, not `CATALOG.md`, not the validators, not the composer.
 2. Turn the description into `journeys/<kebab-name>/spec.json` per
-   `docs/spec-schema.md`. Build **only the screens asked for**; if a
+   `docs/spec-cheatsheet.md`. Build **only the screens asked for**; if a
    transition needs a destination that was not requested, ask rather than
    inventing one. Use the developer's real copy, never lorem.
 
@@ -64,19 +74,17 @@ without the ceremony, so the developer can iterate on layout and copy first.
    may be missing from the font, and hands codegen a string where it needed a
    component; the validator rejects it.
 
-   Take the name from `lib/icon-map.json`, which lists the kit's real exports
-   against the meaning each one carries — `node scripts/icons.mjs` prints it
-   as a table. Write the export verbatim, at the size the slot wants: 16px in
-   a toolbar or a badge, 24px for a standalone control. A name that is not in
-   the map still works, drawing a named placeholder, so an unusual icon is
-   never a blocker.
+   Take the name from `lib/icon-map.json` verbatim, at the size the slot
+   wants: 16px in a toolbar or a badge, 24px for a standalone control. A name
+   that is not in the map still works, drawing a named placeholder, so an
+   unusual icon is never a blocker.
 
    Two more things a screen usually wants that exist only if you ask:
    `"underline": true` marks the active nav item or selected tab with a rule
    in `--primary`, and a status column becomes the kit's own Badge through
-   `props.cellComponents` rather than plain text — check `lib/CATALOG.md` for
-   the variants your kit actually has before mapping values onto them.
-3. If a component you need is absent from `lib/index.json`, stop and report
+   `props.cellComponents` rather than plain text — check the `--brief` output
+   for the variants your kit actually has before mapping values onto them.
+3. If a component you need is absent from the `--brief` list, stop and report
    the gap, naming the closest available alternative. Do not substitute
    silently.
 4. Compose and preview:
