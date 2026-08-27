@@ -115,12 +115,15 @@ before quoting it.
    API per the manifest. A variant or prop not in the manifest is an ERROR:
    record it in the report, fall back to the component's default variant,
    and flag it in chat — never invent an API.
-3. Elements with `customData.annotation: true` are skipped. Elements with no
-   `customData` at all: attempt no guess; list them in the report as
-   unmapped. A bound text whose container already declares a component is
-   the SAME component instance — its text is the label/content prop, never
-   a second component (dedupe by `containerId`, even if a legacy scene
-   wrongly stamped `customData` on the text too).
+3. Elements with `customData.annotation: true` are skipped. So are elements
+   with `customData.part: true` — those are a composite's own anatomy (an
+   Avatar's circle, a header's divider) that the library did not name, already
+   accounted for by the parent component you emit; they are not a second
+   component. Elements with no `customData` at all: attempt no guess; list
+   them in the report as unmapped. A bound text whose container already
+   declares a component is the SAME component instance — its text is the
+   label/content prop, never a second component (dedupe by `containerId`,
+   even if a legacy scene wrongly stamped `customData` on the text too).
 4. Layout comes from the kit's spacing utilities (compact rhythm), inferred
    from the scene's relative positions — never absolute pixel positioning,
    never inline styles, never raw hex (the compliance lint enforces this;

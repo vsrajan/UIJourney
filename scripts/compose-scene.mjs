@@ -45,7 +45,7 @@ const flag = (n, d) => {
 const P = (p) => (isAbsolute(p) ? p : resolve(process.cwd(), p));
 
 if (!specPath) {
-  console.error("usage: node scripts/compose-scene.mjs <spec.json> [--lib p] [--typography p] [--tokens p] [--logo p] [--out p] [--no-validate]");
+  console.error("usage: node scripts/compose-scene.mjs <spec.json> [--lib p] [--typography p] [--tokens p] [--logo p] [--out p] [--no-validate] [--strict]");
   process.exit(2);
 }
 
@@ -229,6 +229,26 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasC
     }
   }
 
+  // Anatomy the librarian did not stamp. A composite's glyph can carry shapes
+  // with no customData of their own — the AppHeader kit ships an Avatar whose
+  // initials text is stamped and whose circle is not. Those reach the scene
+  // unmapped, and "no customData at all" is a validator ERROR that no spec can
+  // fix: a spec cannot reach inside a glyph. A whole sketcher run was spent
+  // proving that and then dropping the logo to get a passing compose.
+  //
+  // An element inside a composite's glyph with no identity of its own IS that
+  // composite's anatomy, and this is the one place that knows the parent. So
+  // say so: stamp it with the parent and mark it a part. Codegen emits the
+  // parent and skips its parts, exactly as it already skips bound text whose
+  // container declares the component.
+  for (const el of out) {
+    if (el.customData?.component) continue;
+    if (el.type === "text" && el.containerId) continue; // described by its container
+    if (!rootComponent) continue;
+    el.customData = { ...(el.customData ?? {}), component: rootComponent, part: true };
+    glyphParts.push(`${rootComponent}: ${el.type}`);
+  }
+
   const byId = Object.fromEntries(out.map((e) => [e.id, e]));
   for (const el of out) {
     if (el.type !== "text" || !el.containerId) continue;
@@ -242,6 +262,7 @@ function instantiate(entry, { x, y, width, frameId, texts = {}, props = {}, hasC
 }
 
 const placeholdersDropped = [];
+const glyphParts = [];
 const iconPlaceholders = [];
 const ignoredKeys = [];
 const missingCellComponents = [];
@@ -915,6 +936,13 @@ if (missingCellComponents.length) {
   console.log(`  cell variant(s) the library could not provide: ${shown.join(", ")}`);
   console.log("  List what your kit really has:  node scripts/lib-index.mjs <Component>");
 }
+if (glyphParts.length) {
+  const shown = [...new Set(glyphParts)];
+  console.log(`  ${glyphParts.length} unstamped glyph shape(s) attributed to their parent: ${shown.join(", ")}`);
+  console.log("  The library did not give these an identity of their own, so they are marked");
+  console.log("  part: true and codegen skips them. Worth telling excalidraw-librarian —");
+  console.log("  an Avatar whose circle is unstamped is a capture the librarian should fix.");
+}
 if (ignoredKeys.length) {
   const shown = [...new Set(ignoredKeys)];
   console.log(`  ${shown.length} spec key(s) had no effect: ${shown.join(", ")}`);
@@ -965,9 +993,17 @@ if (!argv.includes("--no-validate")) {
     if (r.status !== 0) {
       console.log(
         "\nThe scene did not validate. Fix it in the SPEC, never by editing the\n" +
-          ".excalidraw — see docs/scene-rules.md for what each rule means."
+          ".excalidraw — see docs/scene-rules.md for what each rule means.\n" +
+          `The scene was still written to ${outPath}, so you can render and look at it.`
       );
-      process.exit(r.status ?? 1);
+      // Deliberately not fatal by default. The validator is a gate on codegen,
+      // not on looking at a picture, and a library defect no spec can fix used
+      // to stop a sketch dead: an unstamped ellipse in the AppHeader glyph cost
+      // one run its logo, because dropping the logo was the only way to a
+      // passing compose. A preview that arrives with a known flaw beats no
+      // preview. Pass --strict where a clean scene is the actual requirement.
+      if (argv.includes("--strict")) process.exit(r.status ?? 1);
+      console.log("(not fatal — pass --strict to make validation failure an error)");
     }
   }
 }

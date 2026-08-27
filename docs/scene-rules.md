@@ -44,6 +44,21 @@ referencing real `journeyStep` values.
 copy, titles, table content, headers and layout regions are components; an
 annotation inside a frame is a contract violation because codegen drops it.
 
+## `part: true`
+
+A composite's glyph can carry shapes the library never gave an identity — the
+AppHeader kit ships an Avatar whose initials text is stamped and whose circle
+is not. Those would arrive unmapped, and "no customData at all" is an error no
+spec can fix, because a spec cannot reach inside a glyph.
+
+The composer stamps them with their parent and `part: true`. That is the truth
+about them: they are that composite's anatomy. Codegen emits the parent and
+skips its parts, the same way it skips bound text described by its container.
+
+The composer reports each one. It is not a blocker, but it is worth passing to
+`excalidraw-librarian` — an Avatar whose circle is unstamped is a capture bug,
+and stamping it properly is better than having the composer infer it.
+
 ## Fixing a failure
 
 Fix it **in the spec**, never by editing `journey.excalidraw` — the scene is
